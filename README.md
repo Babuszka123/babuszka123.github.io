@@ -8,6 +8,7 @@ Szachy z przyjaciółmi w przeglądarce – na komputerze i na telefonie.
   Grasz z tymi samymi osobami co w aplikacji Jchess na Androida.
 - Gra we dwoje na jednym urządzeniu, zegar szachowy (np. 3 | 2, 5 | 3, 10 min albo własne tempo).
 - Darmowa analiza partii silnikiem Stockfish w przeglądarce: ocena ruchów, celność, najlepsze ruchy, własne warianty.
+- Rysowanie po planszy jak na chess.com: prawy przycisk (na telefonie przytrzymaj palec) – strzałki i zaznaczanie pól; Shift/Ctrl/Alt zmieniają kolor.
 - Motywy planszy, 18 zestawów figur, własne tło, dźwięki.
 - Podstrony: `/online/`, `/ustawienia/`, `/gra/`, `/analiza/`, zaproszenia `/dolacz/?kod=KOD`.
 

@@ -581,15 +581,32 @@ class Board {
   constructor(canvas, opts = {}) {
     this.c = canvas; this.g = null; this.flip = false; this.movable = 0; this.onMove = opts.onMove || null;
     this.sel = -1; this.targets = []; this.drag = null; this.anim = null; this.mark = null; this.arrow = null;
+    this.ann = { arrows: [], sqs: {} }; this.drawing = null; this.lp = null;
     Board.all.add(this);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('pointerdown', e => this.down(e));
     canvas.addEventListener('pointermove', e => this.moveP(e));
     canvas.addEventListener('pointerup', e => this.up(e));
-    canvas.addEventListener('pointercancel', () => { this.drag = null; this.draw(); });
+    canvas.addEventListener('pointercancel', () => { clearTimeout(this.lp); this.lpStart = null; this.drag = null; this.drawing = null; this.draw(); });
     new ResizeObserver(() => this.draw()).observe(canvas);
   }
   static redrawAll() { for (const b of Board.all) if (b.c.isConnected) b.draw(); else Board.all.delete(b); }
-  set(g) { this.g = g; this.sel = -1; this.targets = []; this.draw(); }
+  set(g) { this.g = g; this.sel = -1; this.targets = []; this.ann = { arrows: [], sqs: {} }; this.draw(); }
+  hasAnn() { return this.ann.arrows.length || Object.keys(this.ann.sqs).length; }
+  clearAnn() { if (this.hasAnn()) { this.ann = { arrows: [], sqs: {} }; return true; } return false; }
+  // zatwierdzenie rysowania: to samo pole = zaznaczenie, inne pole = strzałka (ponownie to samo = usunięcie)
+  commitDraw(d) {
+    if (d.to < 0) return;
+    const col = d.col;
+    if (d.from === d.to) {
+      if (this.ann.sqs[d.from] === col) delete this.ann.sqs[d.from]; else this.ann.sqs[d.from] = col;
+    } else {
+      const i = this.ann.arrows.findIndex(a => a.from === d.from && a.to === d.to);
+      const same = i >= 0 && this.ann.arrows[i].col === col;
+      if (i >= 0) this.ann.arrows.splice(i, 1);
+      if (!same) this.ann.arrows.push({ from: d.from, to: d.to, col });
+    }
+  }
   animate(m) {
     if (!S.animate || !m) return;
     this.anim = { m, t0: performance.now() };
@@ -617,6 +634,28 @@ class Board {
   down(e) {
     if (!this.g) return;
     const s = this.at(e); if (s < 0) return;
+    // prawy przycisk myszy: rysowanie (Shift = zielony, Ctrl/⌘ = niebieski, Alt = czerwony)
+    if (e.button === 2) {
+      e.preventDefault();
+      const col = e.altKey ? 3 : (e.ctrlKey || e.metaKey) ? 2 : e.shiftKey ? 1 : 0;
+      this.drawing = { from: s, to: s, col };
+      this.c.setPointerCapture(e.pointerId); this.draw(); return;
+    }
+    if (e.button !== 0) return;
+    if (e.pointerType === 'mouse') { if (this.clearAnn()) this.draw(); }
+    else {
+      // dotyk: przytrzymanie palca = rysowanie
+      clearTimeout(this.lp);
+      this.lpStart = { s, x0: e.clientX, y0: e.clientY };
+      this.lp = setTimeout(() => {
+        if (!this.lpStart) return;
+        this.drag = null; this.sel = -1; this.targets = [];
+        this.drawing = { from: s, to: s, col: 0, touch: true };
+        try { navigator.vibrate && navigator.vibrate(12); } catch (er) { }
+        this.draw();
+      }, 420);
+      try { this.c.setPointerCapture(e.pointerId); } catch (er) { }
+    }
     if (this.sel >= 0 && this.targets.some(m => m.to === s)) { this.emit(this.sel, s); return; }
     if (this.canPick(s)) {
       const was = this.sel === s;
@@ -628,6 +667,8 @@ class Board {
     this.draw();
   }
   moveP(e) {
+    if (this.drawing) { const s = this.at(e); if (s >= 0 && s !== this.drawing.to) { this.drawing.to = s; this.draw(); } return; }
+    if (this.lpStart && Math.hypot(e.clientX - this.lpStart.x0, e.clientY - this.lpStart.y0) > this.sq() * 0.25) { clearTimeout(this.lp); this.lpStart = null; }
     if (!this.drag) return;
     const rc = this.c.getBoundingClientRect();
     this.drag.x = e.clientX - rc.left; this.drag.y = e.clientY - rc.top;
@@ -635,6 +676,9 @@ class Board {
     this.draw();
   }
   up(e) {
+    clearTimeout(this.lp);
+    if (this.drawing) { const d = this.drawing; this.drawing = null; this.lpStart = null; this.commitDraw(d); this.draw(); return; }
+    if (this.lpStart) { this.lpStart = null; if (this.clearAnn()) this.draw(); } // krótkie stuknięcie czyści rysunki
     if (!this.drag) return;
     const d = this.drag, s = this.at(e);
     this.drag = null;
@@ -660,6 +704,8 @@ class Board {
     if (lm) { fill(lm.from, '#cdd26a80'); fill(lm.to, '#cdd26a80'); }
     if (this.mark) { fill(this.mark.from, this.mark.color + '80'); fill(this.mark.to, this.mark.color + '80'); }
     if (this.sel >= 0) fill(this.sel, '#14551e80');
+    for (const [sq, col] of Object.entries(this.ann.sqs)) fill(+sq, Board.SQ[col]);
+    if (this.drawing && this.drawing.from === this.drawing.to) fill(this.drawing.from, Board.SQ[this.drawing.col].replace(/[\d.]+\)$/, '0.45)'));
     if (g.inCheck() && g.status !== 'resigned') {
       const k = g.kingSq(g.side);
       if (k >= 0) {
@@ -698,6 +744,8 @@ class Board {
       else { x.arc(px + q / 2, py + q / 2, q * 0.15, 0, 7); x.fill(); }
     }
     if (this.arrow && !this.anim) this.drawArrow(x, this.arrow.from, this.arrow.to, this.arrow.color || '#15781bc0', q);
+    for (const a of this.ann.arrows) this.drawArrow(x, a.from, a.to, Board.AR[a.col], q);
+    if (this.drawing && this.drawing.to >= 0 && this.drawing.from !== this.drawing.to) this.drawArrow(x, this.drawing.from, this.drawing.to, Board.AR[this.drawing.col].replace(/[\d.]+\)$/, '0.55)'), q);
     if (this.mark && this.mark.symbol && !this.anim) {
       const [px, py] = this.xy(this.mark.to), r = q * 0.2, cx = px + q - r * 0.8, cy = py + r * 0.8;
       x.fillStyle = '#00000055'; x.beginPath(); x.arc(cx, cy + 2, r * 1.05, 0, 7); x.fill();
@@ -709,18 +757,38 @@ class Board {
     if (this.drag && this.drag.moved) { const p = g.b[this.drag.from]; if (p) put(p, this.drag.x - q * 0.65, this.drag.y - q * 1.1, q * 1.3); }
   }
   drawArrow(x, from, to, col, q) {
-    let [x1, y1] = this.xy(from), [x2, y2] = this.xy(to);
-    x1 += q / 2; y1 += q / 2; x2 += q / 2; y2 += q / 2;
-    const len = Math.hypot(x2 - x1, y2 - y1); if (len < 1) return;
-    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, head = q * 0.42, w = q * 0.11;
-    const bx = x2 - ux * head, by = y2 - uy * head, sx = x1 + ux * q * 0.25, sy = y1 + uy * q * 0.25;
-    x.fillStyle = col; x.beginPath();
-    x.moveTo(sx - uy * w, sy + ux * w); x.lineTo(bx - uy * w, by + ux * w); x.lineTo(bx - uy * head * 0.75, by + ux * head * 0.75);
-    x.lineTo(x2, y2); x.lineTo(bx + uy * head * 0.75, by - ux * head * 0.75); x.lineTo(bx + uy * w, by - ux * w);
-    x.lineTo(sx + uy * w, sy - ux * w); x.closePath(); x.fill();
+    const [ax, ay] = this.xy(from), [bx, by] = this.xy(to);
+    const x1 = ax + q / 2, y1 = ay + q / 2, x2 = bx + q / 2, y2 = by + q / 2;
+    const df = Math.abs((to & 7) - (from & 7)), dr = Math.abs((to >> 3) - (from >> 3));
+    const pts = [[x1, y1]];
+    if ((df === 1 && dr === 2) || (df === 2 && dr === 1)) pts.push(Math.abs(y2 - y1) > Math.abs(x2 - x1) ? [x1, y2] : [x2, y1]); // skoczek – strzałka w kształcie L
+    pts.push([x2, y2]);
+    const [px, py] = pts[pts.length - 2];
+    let dx = x2 - px, dy = y2 - py; const len = Math.hypot(dx, dy); if (len < 1) return;
+    dx /= len; dy /= len;
+    const head = q * 0.42, w = q * 0.2;
+    let fx = pts[1][0] - x1, fy = pts[1][1] - y1; const fl = Math.hypot(fx, fy);
+    pts[0] = [x1 + fx / fl * q * 0.28, y1 + fy / fl * q * 0.28];
+    const ex = x2 - dx * head, ey = y2 - dy * head;
+    // całą strzałkę rysujemy jednym kształtem na osobnej warstwie, żeby półprzezroczysty kolor się nie nakładał
+    const off = Board.off || (Board.off = document.createElement('canvas'));
+    const dpr = window.devicePixelRatio || 1, W = this.c.width;
+    if (off.width !== W) { off.width = off.height = W; }
+    const o = off.getContext('2d');
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, W, W); o.setTransform(dpr, 0, 0, dpr, 0, 0);
+    o.strokeStyle = o.fillStyle = '#000'; o.lineWidth = w; o.lineCap = 'butt'; o.lineJoin = 'miter';
+    o.beginPath(); o.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length - 1; i++) o.lineTo(pts[i][0], pts[i][1]);
+    o.lineTo(ex + dx * 1, ey + dy * 1); o.stroke();
+    o.beginPath(); o.moveTo(x2, y2); o.lineTo(ex - dy * head * 0.72, ey + dx * head * 0.72); o.lineTo(ex + dy * head * 0.72, ey - dx * head * 0.72); o.closePath(); o.fill();
+    o.setTransform(1, 0, 0, 1, 0, 0); o.globalCompositeOperation = 'source-in'; o.fillStyle = col; o.fillRect(0, 0, W, W); o.globalCompositeOperation = 'source-over';
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(off, 0, 0); x.restore();
   }
 }
 Board.all = new Set();
+// kolory rysowania: zwykły, Shift, Ctrl/⌘, Alt
+Board.AR = ['rgba(255,170,0,0.8)', 'rgba(21,120,27,0.8)', 'rgba(0,92,190,0.8)', 'rgba(210,40,40,0.8)'];
+Board.SQ = ['rgba(235,97,80,0.8)', 'rgba(172,206,89,0.8)', 'rgba(82,176,220,0.8)', 'rgba(255,170,0,0.8)'];
 
 // ======================================================================= zegar
 const tcParse = s => { const [a, b] = String(s).split('+').map(Number); return { base: a || 0, inc: b || 0 }; };
@@ -1576,7 +1644,7 @@ function showAnalysis() {
         <div class="card stack" style="padding:14px"><div class="row" style="flex-wrap:nowrap"><span class="badge" id="badge"></span><h3 class="grow" id="atitle"></h3><span class="evalpill" id="aeval"></span></div>
           <div class="muted small" id="adetail" style="white-space:pre-line"></div><button class="btn wide" id="backgame" hidden>Wróć do partii</button></div>
         <div class="card" style="padding:14px"><div class="row" style="justify-content:space-between"><h3>Najlepsze ruchy</h3><span class="tiny" id="ldepth"></span></div>
-          <div id="lines" style="margin-top:6px"></div><p class="tiny" style="margin:6px 0 0">Kliknij linię, żeby ją zagrać, albo przesuwaj figury na planszy i sprawdzaj własne pomysły. Strzałki ← → przechodzą przez ruchy.</p></div>
+          <div id="lines" style="margin-top:6px"></div><p class="tiny" style="margin:6px 0 0">Kliknij linię, żeby ją zagrać, albo przesuwaj figury na planszy. Prawy przycisk (na telefonie: przytrzymaj palec) rysuje strzałki i zaznacza pola. Strzałki ← → przechodzą przez ruchy.</p></div>
         <div class="card" style="padding:10px"><canvas class="graph" id="graph" aria-label="Wykres przewagi"></canvas></div>
         <div class="card" id="summary"></div>
         <div class="card moves" id="amoves" style="max-height:340px"></div>
