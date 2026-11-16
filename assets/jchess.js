@@ -345,7 +345,7 @@ const BOTS = [
   { name: 'Wieża', sub: 'Ekspert', elo: '~1700', skill: 12, depth: 9, ms: 700, rnd: 0, think: 900, piece: 'r' },
   { name: 'Hetman', sub: 'Mistrz', elo: '2500+', skill: 20, depth: 22, ms: 1500, rnd: 0, think: 600, piece: 'q' }];
 const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'maestro', bg: 'default', bgColor: '#1d2b22', dim: 35,
-  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2, drawOffers: true, flipBlack: true };
+  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2, drawOffers: true, flipBlack: true, premove: true };
 let S = Object.assign({}, DEF);
 let SAVED = {};
 try { SAVED = JSON.parse(localStorage.getItem('jchess.settings') || '{}') || {}; Object.assign(S, SAVED); } catch (e) { }
@@ -634,10 +634,27 @@ class Board {
   }
   canPick(s) {
     const g = this.g;
-    return g && !g.isOver() && this.movable && g.side === this.movable && g.b[s] && Math.sign(g.b[s]) === this.movable;
+    return g && !g.isOver() && this.movable && (g.side === this.movable || this.premovable) && g.b[s] && Math.sign(g.b[s]) === this.movable;
   }
-  pick(s) { this.sel = s; this.targets = this.g.legalFrom(s); }
+  pick(s) { this.sel = s; this.pmPick = this.g.side !== this.movable; this.targets = this.pmPick ? this.premoveDests(s) : this.g.legalFrom(s); }
+  // premove: pola z samej geometrii ruchu figury (przeciwnik jeszcze się nie ruszył)
+  premoveDests(s) {
+    const g = this.g, p = g.b[s], t = Math.abs(p), c = Math.sign(p), f = s & 7, r = s >> 3, out = [];
+    const add = (ff, rr) => { if (ff >= 0 && ff < 8 && rr >= 0 && rr < 8) out.push({ from: s, to: rr * 8 + ff, promo: 0 }); };
+    if (t === PAWN) { add(f, r + c); if ((c > 0 && r === 1) || (c < 0 && r === 6)) add(f, r + 2 * c); add(f - 1, r + c); add(f + 1, r + c); }
+    else if (t === KNIGHT) KNIGHT_D.forEach(([a, b]) => add(f + a, r + b));
+    else if (t === KING) { KING_D.forEach(([a, b]) => add(f + a, r + b)); if (f === 4 && r === (c > 0 ? 0 : 7)) { add(6, r); add(2, r); } }
+    else for (const [a, b] of t === ROOK ? ROOK_D : t === BISHOP ? BISHOP_D : ROOK_D.concat(BISHOP_D)) for (let k = 1; k < 8; k++) add(f + a * k, r + b * k);
+    return out;
+  }
+  clearPremove() { if (this.premove) { this.premove = null; this.draw(); return true; } return false; }
   emit(from, to) {
+    if (this.g.side !== this.movable) { // jeszcze ruch przeciwnika – zapamiętaj jako premove
+      this.sel = -1; this.targets = []; this.drag = null; this.pmPick = false;
+      this.premove = { from, to };
+      try { navigator.vibrate && navigator.vibrate(8); } catch (e) { }
+      this.draw(); return;
+    }
     this.sel = -1; this.targets = []; this.drag = null;
     this.onMove && this.onMove(from, to);
     this.draw();
@@ -648,6 +665,7 @@ class Board {
     // prawy przycisk myszy: rysowanie (Shift = zielony, Ctrl/⌘ = niebieski, Alt = czerwony)
     if (e.button === 2) {
       e.preventDefault();
+      if (this.clearPremove()) return; // prawy klik anuluje premove (jak na chess.com)
       const col = e.altKey ? 3 : (e.ctrlKey || e.metaKey) ? 2 : e.shiftKey ? 1 : 0;
       this.drawing = { from: s, to: s, col };
       this.c.setPointerCapture(e.pointerId); this.draw(); return;
@@ -674,7 +692,7 @@ class Board {
       const rc = this.c.getBoundingClientRect();
       this.drag = { from: s, x: e.clientX - rc.left, y: e.clientY - rc.top, x0: e.clientX, y0: e.clientY, moved: false, was };
       this.c.setPointerCapture(e.pointerId);
-    } else { this.sel = -1; this.targets = []; }
+    } else { this.sel = -1; this.targets = []; this.clearPremove(); }
     this.draw();
   }
   moveP(e) {
@@ -714,7 +732,8 @@ class Board {
     const lm = S.last && !this.mark ? g.lastMove : null;
     if (lm) { fill(lm.from, '#cdd26a80'); fill(lm.to, '#cdd26a80'); }
     if (this.mark) { fill(this.mark.from, this.mark.color + '80'); fill(this.mark.to, this.mark.color + '80'); }
-    if (this.sel >= 0) fill(this.sel, '#14551e80');
+    if (this.premove) { fill(this.premove.from, '#3a6ea599'); fill(this.premove.to, '#3a6ea599'); }
+    if (this.sel >= 0) fill(this.sel, this.pmPick ? '#3a6ea599' : '#14551e80');
     for (const [sq, col] of Object.entries(this.ann.sqs)) fill(+sq, Board.SQ[col]);
     if (this.drawing && this.drawing.from === this.drawing.to) fill(this.drawing.from, Board.SQ[this.drawing.col].replace(/[\d.]+\)$/, '0.45)'));
     if (g.inCheck() && g.status !== 'resigned') {
@@ -1042,9 +1061,21 @@ function playMove(m, remote, remoteMs = -1) {
   }
   moveSound(g);
   updateGame();
-  if (g.isOver()) setTimeout(showResult, 450);
+  if (g.isOver()) { if (G.board) G.board.premove = null; setTimeout(showResult, 450); }
   else if (isBot() && g.side !== G.my) botThink();
+  else if (remote && G.board && G.board.premove && g.side === G.my) runPremove();
   return true;
+}
+// zaplanowany ruch (premove) wykonywany zaraz po ruchu przeciwnika – o ile jest teraz legalny
+function runPremove() {
+  const pm = G.board.premove; G.board.premove = null;
+  setTimeout(() => {
+    const g = G.game;
+    if (g.isOver() || g.side !== G.my || G.mode === 'local') return G.board && G.board.draw();
+    const opts = g.legalFrom(pm.from).filter(m => m.to === pm.to);
+    if (opts.length) playMove(opts.find(m => m.promo === QUEEN) || opts[0], false);
+    else G.board && G.board.draw();
+  }, 0);
 }
 function onFlag(color, broadcast) {
   if (G.game.isOver()) return;
@@ -1417,6 +1448,8 @@ function updateGame() {
   if (G.screen !== 'game' || !G.board) return;
   const g = G.game, local = G.mode === 'local', over = g.isOver(), turn = g.side;
   G.board.movable = local ? (over ? 0 : turn) : isBot() ? (over ? 0 : G.my) : (!over && !G.lost && G.net ? G.my : 0);
+  G.board.premovable = !local && !over && S.premove !== false;
+  if (!G.board.premovable) G.board.premove = null;
   G.board.arrow = G.hint && !over ? { from: G.hint.from, to: G.hint.to, color: '#2f7fd0c8' } : null;
   G.board.rotSide = local && S.flipBlack !== false && matchMedia('(pointer: coarse)').matches ? (G.board.flip ? WHITE : BLACK) : 0;
   G.board.draw();
@@ -1619,7 +1652,7 @@ async function botThink() {
 }
 function undoBot() {
   if (!G.moves.length) return;
-  G.botTok++; G.hint = null;
+  G.botTok++; G.hint = null; G.board.premove = null;
   if (G.botBusy && G.botEngine) G.botEngine.send('stop');
   // cofnij do ostatniego własnego ruchu (twój ruch + odpowiedź bota)
   do G.moves.pop(); while (G.moves.length && Chess.replay(G.moves).side !== G.my);
@@ -2004,7 +2037,7 @@ function showSettings(from) {
           <div><b class="small muted">Zestaw dźwięków</b><div class="chips3" style="margin-top:8px">${Object.entries(SNDSETS).map(([k, v]) => `<button class="chip ${S.sndset === k ? 'on' : ''}" data-ss="${k}">${v.name}</button>`).join('')}</div></div>
           <label class="small">Głośność: <b id="volv">${S.vol}%</b><input type="range" id="vol" min="0" max="100" value="${S.vol}"></label>
           <div class="row">${[['move', 'Ruch'], ['capture', 'Bicie'], ['check', 'Szach'], ['win', 'Wygrana'], ['notify', 'Przeciwnik']].map(([k, n]) => `<button class="chip" data-snd="${k}">${n}</button>`).join('')}</div></div>
-        <div class="card"><h3>Gra</h3>${[['hints', 'Pokazuj możliwe ruchy'], ['coords', 'Współrzędne na planszy'], ['last', 'Podświetlaj ostatni ruch'], ['animate', 'Animacja ruchów'], ['drawOffers', 'Propozycje remisu od przeciwnika'], ['flipBlack', 'Odwracaj figury przeciwnika przy grze na jednym telefonie']].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
+        <div class="card"><h3>Gra</h3>${[['hints', 'Pokazuj możliwe ruchy'], ['coords', 'Współrzędne na planszy'], ['last', 'Podświetlaj ostatni ruch'], ['animate', 'Animacja ruchów'], ['premove', 'Premove (ruch na zapas w czasie ruchu przeciwnika)'], ['drawOffers', 'Propozycje remisu od przeciwnika'], ['flipBlack', 'Odwracaj figury przeciwnika przy grze na jednym telefonie']].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
         <div class="card stack"><h3>Analiza partii</h3><div class="chips3">${LEVELS.map((l, i) => `<button class="chip ${S.level === i ? 'on' : ''}" data-lv="${i}">${l[0]}</button>`).join('')}</div>
           <p class="tiny" style="margin:0">Szybka trwa kilkanaście sekund, dokładna kilka minut — ale lepiej ocenia trudne pozycje.</p></div>
         <div class="card stack"><h3>Podgląd</h3><canvas id="spv" style="width:100%;max-width:300px;aspect-ratio:1;border-radius:8px"></canvas></div>
