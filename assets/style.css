@@ -62,8 +62,8 @@ input[type=range]{width:100%;accent-color:var(--green)}
 .name-in span{flex:none}
 .name-in input{font-size:18px;font-weight:650}
 /* gra */
-.game{display:grid;grid-template-columns:auto minmax(300px,380px);gap:22px;justify-content:center;align-items:start}
-.boardbox{position:relative;width:var(--bs);height:var(--bs)}
+.game{display:grid;grid-template-columns:max-content minmax(300px,380px);gap:22px;justify-content:center;align-items:start}
+.boardbox{position:relative;width:var(--bs);height:var(--bs);flex:none;aspect-ratio:1}
 .boardbox canvas{width:100%;height:100%;display:block;border-radius:8px;box-shadow:0 14px 40px #000a;touch-action:none}
 .side{display:grid;gap:10px}
 @media(max-width:900px){.game{grid-template-columns:minmax(0,1fr)}.boardbox{margin:0 auto}}
@@ -87,7 +87,7 @@ input[type=range]{width:100%;accent-color:var(--green)}
 .act{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;border-radius:12px;font-size:12.5px;color:var(--ink2)}
 .act:hover{background:#ffffff14;color:var(--ink)}.act .icon{color:var(--ink)}.act.hi,.act.hi .icon{color:var(--green)}
 /* analiza */
-.ana{display:grid;grid-template-columns:auto minmax(320px,420px);gap:22px;justify-content:center;align-items:start}
+.ana{display:grid;grid-template-columns:max-content minmax(320px,420px);gap:22px;justify-content:center;align-items:start}
 .anaboard{display:flex;gap:8px}
 .evalbar{width:26px;border-radius:6px;overflow:hidden;position:relative;background:#403d39;flex:none}
 .evalbar i{position:absolute;left:0;right:0;bottom:0;background:#f2f2f2;transition:height .35s}

@@ -624,8 +624,8 @@ class Board {
   sq() { return this.c.clientWidth / 8; }
   xy(s) { const f = s & 7, r = s >> 3, q = this.sq(); return [(this.flip ? 7 - f : f) * q, (this.flip ? r : 7 - r) * q]; }
   at(e) {
-    const rc = this.c.getBoundingClientRect(), q = rc.width / 8;
-    const c = Math.floor((e.clientX - rc.left) / q), r = Math.floor((e.clientY - rc.top) / q);
+    const rc = this.c.getBoundingClientRect();
+    const c = Math.floor((e.clientX - rc.left) / (rc.width / 8)), r = Math.floor((e.clientY - rc.top) / (rc.height / 8));
     if (c < 0 || c > 7 || r < 0 || r > 7) return -1;
     return (this.flip ? r : 7 - r) * 8 + (this.flip ? 7 - c : c);
   }
@@ -1311,9 +1311,13 @@ async function quickPoll() {
 }
 
 // ---------------------------------------------------------------- gra
-function boardSize(extra = 420) {
+// rozmiar planszy liczony od faktycznej szerokości treści (strona ma max 1240 px), żeby plansza zawsze była kwadratowa
+const BS_GAME = 340, BS_ANA = 400;
+function boardSize(extra = BS_GAME) {
   const w = window.innerWidth, h = window.innerHeight;
-  return w <= 900 ? Math.min(w - 28, 640) : Math.max(280, Math.min(h - 120, w - extra, 780));
+  if (w <= 900) return Math.min(w - 28, 640);
+  const content = Math.min(w, 1240) - 2 * Math.max(w * 0.02, 14);
+  return Math.floor(Math.max(280, Math.min(h - (extra === BS_ANA ? 170 : 120), content - extra, 780)));
 }
 function showGame() {
   closeModal();
@@ -1338,7 +1342,7 @@ function showGame() {
 }
 window.addEventListener('resize', () => {
   const bb = document.querySelector('.boardbox');
-  if (bb) bb.style.setProperty('--bs', boardSize(G.screen === 'analysis' ? 480 : 420) + 'px');
+  if (bb) bb.style.setProperty('--bs', boardSize(G.screen === 'analysis' ? BS_ANA : BS_GAME) + 'px');
   Board.redrawAll(); if (G.screen === 'analysis') drawGraph();
 });
 function userMove(from, to) {
@@ -1751,7 +1755,7 @@ function showAnalysis() {
   render(`${appBar('Analiza partii', true, `<button class="ibtn" id="set" aria-label="Ustawienia">${ic('gear')}</button>`)}
     <div class="ana">
       <div><div class="anaboard"><div class="evalbar" id="ebar"><i></i><b></b></div>
-        <div class="boardbox" style="--bs:${boardSize(480)}px"><canvas id="aboard" aria-label="Plansza analizy"></canvas></div></div>
+        <div class="boardbox" style="--bs:${boardSize(BS_ANA)}px"><canvas id="aboard" aria-label="Plansza analizy"></canvas></div></div>
         <div class="actions" style="margin-top:10px" id="nav"></div></div>
       <div class="side">
         <div><div class="prog" id="prog"><i></i></div><div class="tiny" id="progt" style="margin-top:4px"></div></div>
@@ -1996,5 +2000,5 @@ function showSettings(from) {
 // ======================================================================= start
 applyBg();
 routeFromUrl(false);
-window.JCHESS = { G, A, S, NET, playMove, listPublic, Online };
+window.JCHESS = { G, A, S, NET, playMove, listPublic, Online, showAnalysis };
 }
