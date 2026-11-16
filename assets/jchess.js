@@ -344,11 +344,14 @@ const BOTS = [
   { name: 'Goniec', sub: 'Średni', elo: '~1200', skill: 6, depth: 5, ms: 300, rnd: 0.03, think: 900, piece: 'b' },
   { name: 'Wieża', sub: 'Ekspert', elo: '~1700', skill: 12, depth: 9, ms: 700, rnd: 0, think: 900, piece: 'r' },
   { name: 'Hetman', sub: 'Mistrz', elo: '2500+', skill: 20, depth: 22, ms: 1500, rnd: 0, think: 600, piece: 'q' }];
-const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'classic', bg: 'default', bgColor: '#1d2b22', dim: 35,
-  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'sfx', level: 1, tc: '600+0', color: 0, pub: false, bot: 1 };
+const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'maestro', bg: 'default', bgColor: '#1d2b22', dim: 35,
+  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2 };
 let S = Object.assign({}, DEF);
-try { Object.assign(S, JSON.parse(localStorage.getItem('jchess.settings') || '{}')); } catch (e) { }
+let SAVED = {};
+try { SAVED = JSON.parse(localStorage.getItem('jchess.settings') || '{}') || {}; Object.assign(S, SAVED); } catch (e) { }
 const save = () => { try { localStorage.setItem('jchess.settings', JSON.stringify(S)); } catch (e) { } };
+// nowe domyślne (figury Maestro, dźwięki PyChess) – jednorazowo także dla zapisanych ustawień
+if (SAVED.name && (SAVED.defv | 0) < 2) { S.pieces = 'maestro'; S.sndset = 'pychess'; S.defv = 2; save(); }
 if (!S.name) { S.name = 'Gracz ' + (100 + Math.floor(Math.random() * 900)); save(); }
 let BGIMG = null;
 try { BGIMG = localStorage.getItem('jchess.bgimg'); } catch (e) { }
