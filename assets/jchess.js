@@ -907,6 +907,37 @@ const rnd = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); retur
 let idSeq = 0, idLast = 0;
 const msgId = () => { const t = Date.now(); idSeq = t === idLast ? idSeq + 1 : 0; idLast = t; return t.toString(36).padStart(10, '0') + idSeq.toString(36).padStart(3, '0') + rnd(6).toLowerCase(); };
 const CLAIMS = {};
+// ---------------------------------------------------------------- liczba graczy online
+// każda otwarta strona / aplikacja co 45 s zapisuje znacznik czasu; liczymy aktywnych w ostatnich 2 minutach
+const PID = (() => { try { let id = localStorage.getItem('jchess.pid'); if (!/^[a-z0-9]{16}$/.test(id || '')) { id = rnd(16).toLowerCase(); localStorage.setItem('jchess.pid', id); } return id; } catch (e) { return rnd(16).toLowerCase(); } })();
+let onlineCount = null, presenceAt = 0, presenceBusy = false;
+async function presence() {
+  if (presenceBusy) return; presenceBusy = true; presenceAt = Date.now();
+  try {
+    await api('PUT', `/games/ONLINE/${PID}`, SV);
+    const all = await api('GET', '/games/ONLINE') || {};
+    const now = +all[PID] || Date.now();
+    let n = 0, cleaned = 0;
+    for (const [id, t] of Object.entries(all)) {
+      if (typeof t !== 'number') continue;
+      if (now - t <= 120000) n++;
+      else if (now - t > 600000 && cleaned < 20) { cleaned++; api('DELETE', '/games/ONLINE/' + id).catch(() => { }); }
+    }
+    onlineCount = Math.max(1, n);
+  } catch (e) { onlineCount = null; }
+  presenceBusy = false;
+  showOnlineCount();
+}
+function showOnlineCount() {
+  document.querySelectorAll('[data-online]').forEach(el => {
+    el.hidden = onlineCount == null;
+    if (onlineCount == null) return;
+    el.querySelector('b').textContent = onlineCount;
+    el.querySelector('span').textContent = el.dataset.online === 'long' ? L(onlineCount === 1 ? ' player online' : ' players online', ' graczy online') : ' online';
+  });
+}
+const onlineBadge = kind => `<span class="online-count" data-online="${kind}" ${onlineCount == null ? 'hidden' : ''}><i></i><b>${onlineCount || ''}</b><span></span></span>`;
+const refreshPresence = () => { if (Date.now() - presenceAt > 10000) presence(); else showOnlineCount(); };
 // dołączenie do gry: zapis gościa i jego sekretu w jednej operacji (reguły bazy wpuszczają tylko pierwszego)
 async function claim(code, name) {
   const meta = await api('GET', `/games/${code}/meta`);
@@ -1261,7 +1292,7 @@ function showHome() {
         <p class="muted shadow" style="font-size:17px;max-width:46ch">${L('Play online, against the computer, or with someone next to you on one screen. After a game you can go through it with Stockfish.', 'Graj przez internet, z komputerem albo we dwoje na jednym ekranie. Po partii możesz ją przejrzeć ze Stockfishem.')}</p>
         <label class="name-in"><span class="muted small" style="white-space:nowrap">${L('Your name', 'Twoje imię')}</span><input id="name" maxlength="24" value="${esc(S.name)}"></label>
         <div class="tiles">
-          <button class="tile" id="t-online"><span class="dot" style="background:var(--green-d)">${ic('globe')}</span><span><b>${L('Play online', 'Przez internet')}</b><span>${L("Quick match, open games or a friend's code", 'Szybka gra, wolne gry albo kod od znajomego')}</span></span><span class="chev">${ic('next')}</span></button>
+          <button class="tile" id="t-online"><span class="dot" style="background:var(--green-d)">${ic('globe')}</span><span><b>${L('Play online', 'Przez internet')} ${onlineBadge('short')}</b><span>${L("Quick match, open games or a friend's code", 'Szybka gra, wolne gry albo kod od znajomego')}</span></span><span class="chev">${ic('next')}</span></button>
           <button class="tile" id="t-bot"><span class="dot" style="background:#7a4fb5">${ic('bot')}</span><span><b>${L('Play the computer', 'Z komputerem')}</b><span>${L('5 levels, beginner to master', '5 poziomów, od początkującego do mistrza')}</span></span><span class="chev">${ic('next')}</span></button>
           <button class="tile" id="t-local"><span class="dot" style="background:#b0721c">${ic('screen')}</span><span><b>${L('Pass and play', 'Na jednym urządzeniu')}</b><span>${L('Two players, one screen', 'Dwie osoby, jeden ekran')}</span></span><span class="chev">${ic('next')}</span></button>
           <button class="tile" id="t-set"><span class="dot" style="background:#5e5a54">${ic('palette')}</span><span><b>${L('Settings', 'Ustawienia')}</b><span>${L('Board, pieces, sound, language', 'Plansza, figury, dźwięk, język')}</span></span><span class="chev">${ic('next')}</span></button>
@@ -1274,6 +1305,7 @@ function showHome() {
   $('#t-online').onclick = showOnline;
   $('#t-local').onclick = () => newGameSheet(L('Pass and play', 'Gra na jednym urządzeniu'), false, false, (c, tc) => { G.my = WHITE; G.flip = false; startGame('local', tc); });
   $('#t-bot').onclick = botSheet;
+  refreshPresence();
   $('#t-set').onclick = $('#set').onclick = () => showSettings('home');
 }
 function botSheet() {
@@ -1288,7 +1320,7 @@ function startBot(color, tc, lv) {
 let lobbyTimer = null, lobbyBusy = false;
 function showOnline() {
   cleanupNet(true); closeModal();
-  render(`${appBar(L('Play online', 'Gra przez internet'), true)}
+  render(`${appBar(L('Play online', 'Gra przez internet'), true, onlineBadge('long'))}
     <div class="grid2">
       <div class="stack">
         <div class="card stack"><div class="row"><span class="tile" style="padding:0;border:0;background:none"><span class="dot" style="background:var(--green-d)">${ic('user')}</span></span>
@@ -1309,6 +1341,7 @@ function showOnline() {
   $('#join').onclick = () => joinCode($('#code').value);
   $('#code').onkeydown = e => { if (e.key === 'Enter') joinCode(e.target.value); };
   clearInterval(lobbyTimer); fetchLobby(); lobbyTimer = setInterval(fetchLobby, 4000);
+  refreshPresence();
 }
 async function fetchLobby() {
   if (G.screen !== 'online') return clearInterval(lobbyTimer);
@@ -2089,5 +2122,6 @@ function showSettings(from) {
 // ======================================================================= start
 applyBg();
 routeFromUrl(false);
-window.JCHESS = { G, A, S, NET, playMove, listPublic, Online, showAnalysis };
+setInterval(presence, 45000);
+window.JCHESS = { G, A, S, NET, playMove, listPublic, Online, showAnalysis, presence, get onlineCount() { return onlineCount; } };
 }

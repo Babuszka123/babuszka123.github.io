@@ -139,3 +139,10 @@ input[type=range]{width:100%;accent-color:var(--green)}
 .botb.on b,.botb.on span{color:#fff}
 @media (max-width:520px){.bots{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .card a{color:#9fd36a}
+.online-count{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#9fd36a;background:#7fc04a1f;border-radius:99px;padding:2px 9px 3px;vertical-align:middle;white-space:nowrap}
+.online-count[hidden]{display:none!important}
+.online-count i{width:7px;height:7px;border-radius:50%;background:#7fc04a;box-shadow:0 0 0 3px #7fc04a40;animation:pulse 2s infinite}
+.online-count span{font-weight:600}
+.bar .online-count{font-size:13.5px;padding:5px 12px 6px}
+@keyframes pulse{50%{box-shadow:0 0 0 5px #7fc04a10}}
+.tile .online-count b{font-size:12.5px;display:inline;margin:0;color:inherit}
