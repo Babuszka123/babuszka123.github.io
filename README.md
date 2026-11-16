@@ -14,6 +14,7 @@ Szachy z przyjaciółmi w przeglądarce – na komputerze i na telefonie.
 Na telefonie: otwórz stronę i wybierz w przeglądarce „Dodaj do ekranu głównego”.
 
 ## Licencje
+- Dźwięki: zestaw SFX z lichess.org (Enigmahack, AGPLv3+) oraz dźwięki programu PyChess (GPL).
 - Stockfish (stockfish.js, Nathan Rugg i autorzy Stockfisha) – GNU GPL v3: https://github.com/nmrugg/stockfish.js
 - Zestawy figur z lichess.org: Cburnett, Merida – GPL; California, Maestro, Cardinal, Staunty, Tatiana, Fresca, Gioco,
   Dubrovny, Horsey – CC BY-NC-SA 4.0; pozostałe zgodnie z licencjami autorów. Dlatego Jchess jest darmowy i nie może być sprzedawany.

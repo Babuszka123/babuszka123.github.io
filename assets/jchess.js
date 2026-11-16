@@ -338,7 +338,7 @@ const BOARDS = [['Klasyczny', '#f0d9b5', '#b58863'], ['Zielony', '#eeeed2', '#76
 const PRESETS = ['0+0', '60+0', '120+1', '180+0', '180+2', '300+0', '300+3', '600+0', '600+5', '900+10', '1800+0', '1800+20'];
 const LEVELS = [['Szybka', 10, 600], ['Normalna', 14, 1500], ['Dokładna', 18, 4000]];
 const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'classic', bg: 'default', bgColor: '#1d2b22', dim: 35,
-  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, level: 1, tc: '600+0', color: 0, pub: false };
+  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'sfx', level: 1, tc: '600+0', color: 0, pub: false };
 let S = Object.assign({}, DEF);
 try { Object.assign(S, JSON.parse(localStorage.getItem('jchess.settings') || '{}')); } catch (e) { }
 const save = () => { try { localStorage.setItem('jchess.settings', JSON.stringify(S)); } catch (e) { } };
@@ -437,8 +437,40 @@ function bell(t, f, { len = 0.9, gain = 0.25 } = {}) {
     os.connect(g).connect(o); os.start(t); os.stop(t + len + 0.05);
   });
 }
+// zestawy nagranych dźwięków (wolne licencje) – pliki ładowane przy pierwszym użyciu
+const SNDSETS = {
+  sfx: { name: 'Lichess SFX', files: { move: 'move', capture: 'capture', castle: 'move', check: 'check', promote: 'confirmation', start: 'genericnotify',
+    win: 'victory', lose: 'defeat', draw: 'draw', notify: 'genericnotify', lowtime: 'lowtime', illegal: 'error' } },
+  pychess: { name: 'Drewno (PyChess)', files: { move: 'move1', capture: 'capture2', castle: 'castle', check: 'check1', promote: 'success', start: 'start1',
+    win: 'win1', lose: 'lose1', draw: 'draw1', notify: 'choice', illegal: 'invalid' } },
+  synth: { name: 'Syntezowane' }
+};
+const bufs = {};
+const sndUrl = (set, f) => typeof JC_SOUNDS !== 'undefined' ? JC_SOUNDS[set][f] : BASE + 'assets/sounds/' + set + '/' + f + '.mp3';
+function loadBuf(set, f) {
+  const k = set + '/' + f;
+  if (!bufs[k]) bufs[k] = fetch(sndUrl(set, f)).then(r => r.arrayBuffer())
+    .then(a => new Promise((res, rej) => audio().decodeAudioData(a, res, rej))).catch(() => null);
+  return bufs[k];
+}
+function preloadSounds() {
+  const set = SNDSETS[S.sndset];
+  if (set && set.files && audio()) ['move', 'capture', 'check', 'castle'].forEach(k => loadBuf(S.sndset, set.files[k]));
+}
+document.addEventListener('pointerdown', () => { if (S.sound) preloadSounds(); }, { once: true, capture: true });
 function sound(kind) {
   if (!S.sound || !S.vol) return;
+  const c = audio(); if (!c) return;
+  const set = SNDSETS[S.sndset] || SNDSETS.sfx, f = set.files && set.files[kind];
+  if (!f) return synth(kind);
+  loadBuf(S.sndset, f).then(b => {
+    if (!b) return synth(kind);
+    const src = c.createBufferSource(); src.buffer = b;
+    const g = c.createGain(); g.gain.value = S.vol / 100;
+    src.connect(g).connect(c.destination); src.start();
+  });
+}
+function synth(kind) {
   const c = audio(); if (!c) return;
   const t = c.currentTime + 0.01;
   switch (kind) {
@@ -452,7 +484,7 @@ function sound(kind) {
     case 'lose': [659, 523, 392].forEach((f, i) => bell(t + i * 0.16, f, { gain: 0.18, len: 1 })); break;
     case 'draw': bell(t, 659, { gain: 0.18 }); bell(t + 0.16, 659, { gain: 0.15, len: 1 }); break;
     case 'notify': bell(t, 784, { gain: 0.2, len: 0.6 }); bell(t + 0.1, 1175, { gain: 0.2, len: 0.9 }); break;
-    case 'tick': knock(t, { freq: 2600, body: 900, len: 0.03, gain: 0.35 }); break;
+    case 'tick': case 'lowtime': knock(t, { freq: 2600, body: 900, len: 0.03, gain: 0.35 }); break;
     case 'illegal': knock(t, { freq: 400, body: 90, len: 0.09, gain: 0.5 }); break;
   }
 }
@@ -890,7 +922,7 @@ function cleanupNet(bye) {
 }
 function startGame(mode, tc) {
   G.mode = mode; G.tc = tc; G.game = new Chess(); G.moves = []; G.clock = new Clock(tc);
-  G.started = true; G.lost = false; G.pendingDraw = G.pendingRematch = false;
+  G.started = true; G.lost = false; G.pendingDraw = G.pendingRematch = false; G.lowWarned = 0;
   closeModal(); stopAnalysis(); showGame(); sound('start');
 }
 function playMove(m, remote, remoteMs = -1) {
@@ -921,7 +953,11 @@ setInterval(() => {
   const now = performance.now();
   if (G.screen === 'game') updateClocks(now);
   const mine = G.mode === 'local' ? G.game.side : G.my;
-  if (G.clock.run === mine && G.clock.left(mine, now) < 10000 && G.clock.left(mine, now) > 0 && now - SND.lastTick > 1000) { SND.lastTick = now; sound('tick'); }
+  if (G.clock.run === mine && G.clock.left(mine, now) < 10000 && G.clock.left(mine, now) > 0) {
+    const set = SNDSETS[S.sndset];
+    if (set && set.files && set.files.lowtime) { if (G.lowWarned !== mine) { G.lowWarned = mine; sound('lowtime'); } }
+    else if (now - SND.lastTick > 1000) { SND.lastTick = now; sound('tick'); }
+  }
   if (G.mode === 'local') { const f = G.clock.flagged(now, 0); if (f) onFlag(f, false); }
   else if (!G.lost) {
     if (G.clock.flagged(now, 0) === G.my) onFlag(G.my, true);
@@ -1739,6 +1775,7 @@ function showSettings(from) {
       </div>
       <div class="stack">
         <div class="card stack"><h3>Dźwięki</h3><label class="toggle" style="padding-top:0"><span>Dźwięki gry</span><input type="checkbox" data-t="sound" ${S.sound ? 'checked' : ''}></label>
+          <div><b class="small muted">Zestaw dźwięków</b><div class="chips3" style="margin-top:8px">${Object.entries(SNDSETS).map(([k, v]) => `<button class="chip ${S.sndset === k ? 'on' : ''}" data-ss="${k}">${v.name}</button>`).join('')}</div></div>
           <label class="small">Głośność: <b id="volv">${S.vol}%</b><input type="range" id="vol" min="0" max="100" value="${S.vol}"></label>
           <div class="row">${[['move', 'Ruch'], ['capture', 'Bicie'], ['check', 'Szach'], ['win', 'Wygrana'], ['notify', 'Przeciwnik']].map(([k, n]) => `<button class="chip" data-snd="${k}">${n}</button>`).join('')}</div></div>
         <div class="card"><h3>Gra</h3>${[['hints', 'Pokazuj możliwe ruchy'], ['coords', 'Współrzędne na planszy'], ['last', 'Podświetlaj ostatni ruch'], ['animate', 'Animacja ruchów']].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
@@ -1746,7 +1783,7 @@ function showSettings(from) {
           <p class="tiny" style="margin:0">Szybka trwa kilkanaście sekund, dokładna kilka minut — ale lepiej ocenia trudne pozycje.</p></div>
         <div class="card stack"><h3>Podgląd</h3><canvas id="spv" style="width:100%;max-width:300px;aspect-ratio:1;border-radius:8px"></canvas></div>
         <div class="card"><h3>O stronie</h3><p class="tiny" style="margin:8px 0 0">Jchess · analiza: Stockfish 19 w wersji WebAssembly (stockfish.js, GNU GPL v3, github.com/nmrugg/stockfish.js) działa w twojej przeglądarce.
-          Zestawy figur z projektu lichess.org: Cburnett i Merida — GPL; California, Maestro, Cardinal, Staunty, Tatiana, Fresca, Gioco, Dubrovny, Horsey — CC BY-NC-SA 4.0; pozostałe wg licencji autorów. Dlatego Jchess jest darmowy i nie może być sprzedawany.</p></div>
+          Zestawy figur z projektu lichess.org: Cburnett i Merida — GPL; California, Maestro, Cardinal, Staunty, Tatiana, Fresca, Gioco, Dubrovny, Horsey — CC BY-NC-SA 4.0; pozostałe wg licencji autorów. Dźwięki: zestaw SFX z lichess.org (Enigmahack, AGPLv3+) i dźwięki z programu PyChess (GPL). Dlatego Jchess jest darmowy i nie może być sprzedawany.</p></div>
       </div>
     </div>`, 'settings');
   window.scrollTo(0, y);
@@ -1767,6 +1804,7 @@ function showSettings(from) {
   $('#bgc').oninput = e => { S.bgColor = e.target.value; S.bg = 'color'; save(); applyBg(); };
   $('#bgc').onchange = upd;
   $('#bgf').onchange = e => e.target.files[0] && loadBgImage(e.target.files[0]);
+  document.querySelectorAll('[data-ss]').forEach(b => b.onclick = () => { S.sndset = b.dataset.ss; save(); const was = S.sound; S.sound = true; sound('move'); S.sound = was; showSettings(); });
   $('#vol').oninput = e => { S.vol = +e.target.value; $('#volv').textContent = S.vol + '%'; save(); };
   $('#vol').onchange = () => sound('move');
   document.querySelectorAll('[data-snd]').forEach(b => b.onclick = () => { const was = S.sound; S.sound = true; sound(b.dataset.snd); S.sound = was; });
