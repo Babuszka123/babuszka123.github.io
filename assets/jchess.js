@@ -345,7 +345,7 @@ const BOTS = [
   { name: 'Wieża', sub: 'Ekspert', elo: '~1700', skill: 12, depth: 9, ms: 700, rnd: 0, think: 900, piece: 'r' },
   { name: 'Hetman', sub: 'Mistrz', elo: '2500+', skill: 20, depth: 22, ms: 1500, rnd: 0, think: 600, piece: 'q' }];
 const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'maestro', bg: 'default', bgColor: '#1d2b22', dim: 35,
-  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2 };
+  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2, drawOffers: true, flipBlack: true };
 let S = Object.assign({}, DEF);
 let SAVED = {};
 try { SAVED = JSON.parse(localStorage.getItem('jchess.settings') || '{}') || {}; Object.assign(S, SAVED); } catch (e) { }
@@ -453,7 +453,7 @@ const SNDSETS = {
   sfx: { name: 'Lichess SFX', files: { move: 'move', capture: 'capture', castle: 'move', check: 'check', promote: 'confirmation', start: 'genericnotify',
     win: 'victory', lose: 'defeat', draw: 'draw', notify: 'genericnotify', lowtime: 'lowtime', illegal: 'error' } },
   pychess: { name: 'Drewno (PyChess)', files: { move: 'move1', capture: 'capture2', castle: 'castle', check: 'check1', promote: 'success', start: 'start1',
-    win: 'win1', lose: 'lose1', draw: 'draw1', notify: 'choice', illegal: 'invalid' } },
+    win: 'win1', lose: 'lose1', draw: 'draw1', notify: 'choice', lowtime: 'alarm', illegal: 'invalid' } },
   synth: { name: 'Syntezowane' }
 };
 const bufs = {};
@@ -739,7 +739,14 @@ class Board {
     const imgs = pieceImgs();
     let at = 1;
     if (this.anim) { at = (performance.now() - this.anim.t0) / 170; if (at >= 1) { this.anim = null; at = 1; } }
-    const put = (p, px, py, size) => { const im = imgs[pcode(p)]; if (im && im.complete && im.naturalWidth) x.drawImage(im, px + size * 0.03, py + size * 0.03, size * 0.94, size * 0.94); };
+    const put = (p, px, py, size) => {
+      const im = imgs[pcode(p)]; if (!(im && im.complete && im.naturalWidth)) return;
+      // gra na jednym urządzeniu: figury jednej strony obrócone o 180° w stronę gracza naprzeciwko
+      if (this.rotSide && Math.sign(p) === this.rotSide) {
+        x.save(); x.translate(px + size / 2, py + size / 2); x.rotate(Math.PI);
+        x.drawImage(im, -size * 0.47, -size * 0.47, size * 0.94, size * 0.94); x.restore();
+      } else x.drawImage(im, px + size * 0.03, py + size * 0.03, size * 0.94, size * 0.94);
+    };
     for (let s = 0; s < 64; s++) {
       const p = g.b[s];
       if (!p || (this.drag && this.drag.moved && s === this.drag.from)) continue;
@@ -849,6 +856,8 @@ function explain(e) {
   return 'Brak połączenia z internetem.';
 }
 async function serverTime() { await api('PUT', '/games/CLOCK/t', SV); return +(await api('GET', '/games/CLOCK/t')); }
+// imię z sieci: tylko tekst, bez znaków sterujących, max 24 znaki
+const cleanName = (v, def = 'Przeciwnik') => { const t = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, 24); return t || def; };
 async function listPublic() {
   const now = await serverTime(), all = await api('GET', '/games/PUBLIC') || {}, out = [];
   for (const [code, m] of Object.entries(all)) {
@@ -859,32 +868,32 @@ async function listPublic() {
       if (now - seen > 180000) api('DELETE', '/games/' + code).catch(() => { });
       continue;
     }
-    if (now - seen <= 45000) out.push({ code, name: m.name, hostColor: m.color || 'w', tc: m.tc || '0+0', created: +m.created || 0 });
+    if (!/^[A-Z0-9]{4,8}$/.test(code) || typeof m.name !== 'string') continue;
+    const tc = typeof m.tc === 'string' && /^\d{1,5}\+\d{1,3}$/.test(m.tc) ? m.tc : '0+0';
+    if (now - seen <= 45000) out.push({ code, name: cleanName(m.name), hostColor: m.color === 'b' ? 'b' : 'w', tc, created: +m.created || 0 });
   }
-  return out.sort((a, b) => a.created - b.created || a.code.localeCompare(b.code));
+  return out.sort((a, b) => a.created - b.created || a.code.localeCompare(b.code)).slice(0, 40);
 }
+// sekret gracza: zna go tylko jego urządzenie; reguły bazy sprawdzają nim, kto wysłał wiadomość i kto może usunąć grę
+const rnd = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, b => CODE_CHARS[b % CODE_CHARS.length]).join(''); };
+let idSeq = 0, idLast = 0;
+const msgId = () => { const t = Date.now(); idSeq = t === idLast ? idSeq + 1 : 0; idLast = t; return t.toString(36).padStart(10, '0') + idSeq.toString(36).padStart(3, '0') + rnd(6).toLowerCase(); };
+const CLAIMS = {};
+// dołączenie do gry: zapis gościa i jego sekretu w jednej operacji (reguły bazy wpuszczają tylko pierwszego)
 async function claim(code, name) {
   const meta = await api('GET', `/games/${code}/meta`);
-  if (!meta || typeof meta !== 'object') return false;
-  const url = `/games/${code}/meta/guest`;
-  let etag = null, val;
-  try {
-    const r = await fetch(DB + url + '.json', { headers: { 'X-Firebase-ETag': 'true' } });
-    if (!r.ok) throw 0;
-    etag = r.headers.get('ETag'); val = await r.json();
-  } catch (e) { val = await api('GET', url); }
-  if (val !== null) return false;
-  if (!etag) { await api('PUT', url, name); return true; }
-  try {
-    const w = await fetch(DB + url + '.json', { method: 'PUT', headers: { 'if-match': etag }, body: JSON.stringify(name) });
-    if (w.status === 412) return false;
-    if (!w.ok) throw 0;
-    return true;
-  } catch (e) { await api('PUT', url, name); return true; }
+  if (!meta || typeof meta !== 'object' || meta.guest) return false;
+  const secret = rnd(24);
+  try { await api('PATCH', `/games/${code}`, { 'meta/guest': name, 'sec/g': secret }); }
+  catch (e) { if (e.status === 401 || e.status === 403) return false; throw e; }
+  if (await api('GET', `/games/${code}/meta/guest`) !== name) return false; // wyścig przy starych regułach
+  CLAIMS[code] = secret;
+  return true;
 }
 class Online {
   constructor({ code, host, name, hostColor, tc, isPublic, claimed, L }) {
     Object.assign(this, { code, host, name, hostColor, tc, isPublic, claimed, L });
+    this.secret = host ? rnd(24) : (claimed && CLAIMS[code]) || null;
     this.me = host ? 'h' : 'g'; this.other = host ? 'g' : 'h';
     this.seen = new Set(); this.closed = false; this.connected = false; this.listed = false;
     this.q = Promise.resolve(); this.fails = 0; this.peerBeat = null; this.peerT = Date.now(); this.peerSeen = false; this.peerOff = false;
@@ -893,8 +902,8 @@ class Online {
   async start() {
     try {
       if (this.host) {
-        await api('DELETE', '/games/' + this.code);
-        await api('PUT', `/games/${this.code}/meta`, { host: this.name, hostColor: this.hostColor, created: SV, v: 1 });
+        try { await api('DELETE', '/games/' + this.code); } catch (e) { }
+        await api('PATCH', `/games/${this.code}`, { meta: { host: this.name, hostColor: this.hostColor, created: SV, v: 1 }, 'sec/h': this.secret });
         if (this.isPublic) {
           await api('PUT', '/games/PUBLIC/' + this.code, { name: this.name, color: this.hostColor, tc: this.tc, created: SV, seen: SV });
           this.listed = true;
@@ -903,6 +912,7 @@ class Online {
         const meta = await api('GET', `/games/${this.code}/meta`);
         if (!meta || typeof meta !== 'object') return this.fail(`Nie ma gry o kodzie ${this.code}. Sprawdź kod.`);
         if (!await claim(this.code, this.name)) return this.fail('Do tej gry dołączył już ktoś inny.');
+        this.secret = CLAIMS[this.code];
       }
       if (this.closed) return;
       this.stream();
@@ -940,7 +950,7 @@ class Online {
   process(id, v) {
     if (!v || typeof v !== 'object' || this.seen.has(id)) return;
     this.seen.add(id);
-    if (v.f === this.me || typeof v.m !== 'string') return;
+    if (v.f === this.me || typeof v.m !== 'string' || v.m.length > 200) return;
     !this.closed && this.L.onLine(v.m);
   }
   async beat() {
@@ -959,13 +969,22 @@ class Online {
     if (this.closed) return;
     this.q = this.q.then(async () => {
       for (let i = 0; i < 5; i++) {
-        try { await api('POST', `/games/${this.code}/msgs`, { f: this.me, m: line, t: SV }); return; }
+        try { await this.post(line); return; }
         catch (e) { if (e.status === 401 || e.status === 403) return this.fail('Baza odmówiła zapisu.'); }
         if (this.closed) return;
         await new Promise(r => setTimeout(r, 1000 * (i + 1)));
       }
       this.fail('Nie udało się wysłać ruchu — brak internetu.');
     });
+  }
+  // wiadomość + dowód (sekret) w osobnej, nieczytelnej gałęzi – jedna operacja
+  post(line) {
+    const id = msgId();
+    return api('PATCH', `/games/${this.code}`, { ['msgs/' + id]: { f: this.me, m: String(line).slice(0, 200), t: SV }, ['proof/' + id]: this.secret });
+  }
+  async kill() {
+    await api('PUT', `/games/${this.code}/kill`, this.secret);
+    await api('DELETE', '/games/' + this.code);
   }
   unlist() { if (this.listed) { this.listed = false; api('DELETE', '/games/PUBLIC/' + this.code).catch(() => { }); } }
   shutdown() { clearInterval(this.hb); if (this.es) this.es.close(); }
@@ -979,11 +998,12 @@ class Online {
     const wasListed = this.listed, connected = this.connected;
     this.closed = true; this.shutdown(); this.listed = false;
     this.q = this.q.then(async () => {
-      try {
-        if (wasListed) await api('DELETE', '/games/PUBLIC/' + this.code);
-        if (bye && connected) await api('POST', `/games/${this.code}/msgs`, { f: this.me, m: 'BYE' });
-        if (this.host) { await new Promise(r => setTimeout(r, 2500)); await api('DELETE', '/games/' + this.code); }
-      } catch (e) { }
+      try { if (bye && connected) await this.post('BYE'); } catch (e) { }
+      if (this.host) {
+        if (connected) await new Promise(r => setTimeout(r, 2500)); // przeciwnik zdąży odczytać BYE
+        try { await this.kill(); } catch (e) { }
+      }
+      try { if (wasListed) await api('DELETE', '/games/PUBLIC/' + this.code); } catch (e) { }
     });
   }
 }
@@ -1004,7 +1024,7 @@ function cleanupNet(bye) {
 function startGame(mode, tc) {
   G.mode = mode; G.tc = tc; G.game = new Chess(); G.moves = []; G.clock = new Clock(tc);
   G.started = true; G.lost = false; G.pendingDraw = G.pendingRematch = false; G.lowWarned = 0;
-  G.botTok++; G.botNew = true; G.hint = null;
+  G.botTok++; G.botNew = true; G.hint = null; G.drawOffers = 0; G.drawsBlocked = false; G.myDrawPly = -10;
   closeModal(); stopAnalysis(); showGame(); sound('start');
   if (isBot()) botThink();
 }
@@ -1013,7 +1033,8 @@ function playMove(m, remote, remoteMs = -1) {
   if (!m || !g.move(m)) return false;
   G.moves.push(toUci(m)); G.hint = null;
   const now = performance.now(), left = G.clock.onMove(mover, now);
-  if (remote && remoteMs >= 0 && G.clock.on) G.clock.set(mover, remoteMs);
+  // czas od przeciwnika: nie więcej, niż wynika z naszego zegara (ochrona przed „dopisywaniem” sobie czasu)
+  if (remote && remoteMs >= 0 && G.clock.on) G.clock.set(mover, Math.min(remoteMs, left + 2500));
   if (g.isOver()) G.clock.stop(now);
   if (!remote && G.mode === 'online' && G.net) G.net.send('MOVE ' + toUci(m) + (G.clock.on ? ' ' + left : ''));
   if (G.screen === 'game' && G.board) {
@@ -1066,7 +1087,7 @@ const NET = {
       case 'HELLO': {
         if (!G.host || G.started || !G.net) return;
         const p = arg.split(' '); p.shift();
-        G.opp = p.join(' ') || 'Przeciwnik';
+        G.opp = cleanName(p.join(' '));
         G.net.unlist(); G.quick = false; sound('notify');
         G.net.send(`WELCOME ${G.my === WHITE ? 'b' : 'w'} ${G.tc} ${S.name}`);
         startGame('online', G.tc); toast('Połączono z: ' + G.opp);
@@ -1076,8 +1097,8 @@ const NET = {
         if (G.host || G.started) return;
         const p = arg.split(' ');
         G.my = p[0] === 'w' ? WHITE : BLACK;
-        const tc = p[1] && p[1].includes('+') ? p[1] : '0+0';
-        G.opp = p.slice(2).join(' ') || 'Przeciwnik';
+        const tc = /^\d{1,5}\+\d{1,3}$/.test(p[1] || '') ? p[1] : '0+0';
+        G.opp = cleanName(p.slice(2).join(' '));
         sound('notify'); startGame('online', tc); toast('Połączono z: ' + G.opp + (tcParse(tc).base ? ' · ' + tcLabel(tc) : ''));
         break;
       }
@@ -1087,14 +1108,28 @@ const NET = {
         if (g.side === G.my || !playMove(fromUci(p[0]), true, isNaN(ms) ? -1 : ms)) toast('Nieprawidłowy ruch: ' + p[0]);
         break;
       }
-      case 'TIMEOUT': if (G.started && !g.isOver()) onFlag(arg[0] === 'w' ? WHITE : BLACK, false); break;
-      case 'RESIGN': if (G.started && !g.isOver()) { g.resign(-G.my); G.clock.stop(); updateGame(); showResult(); } break;
-      case 'DRAW?':
-        if (!G.started || g.isOver()) return;
-        modal({ title: 'Propozycja remisu', msg: `${G.opp} proponuje remis.`, cancelable: false, buttons: [
-          { label: 'Przyjmij', cls: 'primary', fn: () => { if (g.isOver()) return; g.agreeDraw(); G.net && G.net.send('DRAW_OK'); updateGame(); showResult(); } },
-          { label: 'Odrzuć', cls: 'ghost', fn: () => G.net && G.net.send('DRAW_NO') }] });
+      case 'TIMEOUT': {
+        if (!G.started || g.isOver()) break;
+        const c = arg[0] === 'w' ? WHITE : BLACK;
+        // przeciwnik może ogłosić swój koniec czasu; nasz – tylko gdy nasz zegar też to potwierdza
+        if (c !== G.my || (G.clock.on && G.clock.left(G.my, performance.now()) < 3000)) onFlag(c, false);
         break;
+      }
+      case 'RESIGN': if (G.started && !g.isOver()) { g.resign(-G.my); G.clock.stop(); updateGame(); showResult(); } break;
+      case 'DRAW?': {
+        if (!G.started || g.isOver()) return;
+        G.drawOffers = (G.drawOffers || 0) + 1;
+        // spam remisów: automatyczne odrzucanie (w tej partii albo na stałe)
+        if (G.drawsBlocked || S.drawOffers === false) { G.net && G.net.send('DRAW_NO'); return; }
+        const btns = [
+          { label: 'Przyjmij', cls: 'primary', fn: () => { if (g.isOver()) return; g.agreeDraw(); G.net && G.net.send('DRAW_OK'); updateGame(); showResult(); } },
+          { label: 'Odrzuć', cls: 'ghost', fn: () => G.net && G.net.send('DRAW_NO') }];
+        if (G.drawOffers > 1) btns.push(
+          { label: 'Odrzucaj do końca tej partii', fn: () => { G.drawsBlocked = true; G.net && G.net.send('DRAW_NO'); toast('Kolejne propozycje remisu w tej partii będą odrzucane automatycznie.'); } },
+          { label: 'Wyłącz propozycje remisu na stałe', fn: () => { S.drawOffers = false; save(); G.net && G.net.send('DRAW_NO'); toast('Wyłączono propozycje remisu. Włączysz je z powrotem w Ustawieniach.'); } });
+        modal({ title: 'Propozycja remisu', msg: `${G.opp} proponuje remis.` + (G.drawOffers > 1 ? ` (już ${G.drawOffers}. raz)` : ''), cancelable: false, buttons: btns });
+        break;
+      }
       case 'DRAW_OK': if (G.pendingDraw && !g.isOver()) { g.agreeDraw(); updateGame(); showResult(); } G.pendingDraw = false; break;
       case 'DRAW_NO': G.pendingDraw = false; toast(G.opp + ' odrzuca remis.'); break;
       case 'REMATCH?':
@@ -1195,7 +1230,7 @@ function showHome() {
       <canvas class="preview" id="pv" aria-label="Podgląd planszy"></canvas>
     </section>`, 'home');
   const b = new Board($('#pv')); b.set(Chess.replay(['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5', 'a7a6']));
-  $('#name').onchange = e => { S.name = e.target.value.trim().slice(0, 24) || 'Gracz'; save(); };
+  $('#name').onchange = e => { S.name = cleanName(e.target.value, 'Gracz'); save(); };
   $('#t-online').onclick = showOnline;
   $('#t-local').onclick = () => newGameSheet('Gra na jednym urządzeniu', false, false, (c, tc) => { G.my = WHITE; G.flip = false; startGame('local', tc); });
   $('#t-bot').onclick = botSheet;
@@ -1383,6 +1418,7 @@ function updateGame() {
   const g = G.game, local = G.mode === 'local', over = g.isOver(), turn = g.side;
   G.board.movable = local ? (over ? 0 : turn) : isBot() ? (over ? 0 : G.my) : (!over && !G.lost && G.net ? G.my : 0);
   G.board.arrow = G.hint && !over ? { from: G.hint.from, to: G.hint.to, color: '#2f7fd0c8' } : null;
+  G.board.rotSide = local && S.flipBlack !== false && matchMedia('(pointer: coarse)').matches ? (G.board.flip ? WHITE : BLACK) : 0;
   G.board.draw();
   const top = local ? (G.board.flip ? WHITE : BLACK) : -G.my;
   const nm = c => local ? (c === WHITE ? 'Białe' : 'Czarne') : c === G.my ? S.name + ' (Ty)' : G.opp;
@@ -1481,7 +1517,8 @@ function requestRematch() { if (!G.net || G.lost) return; G.pendingRematch = tru
 function offerDraw() {
   if (!G.net || G.game.isOver()) return;
   if (G.pendingDraw) return toast('Czekam na odpowiedź przeciwnika…');
-  modal({ title: 'Zaproponować remis?', buttons: [{ label: 'Tak, zaproponuj', cls: 'primary', fn: () => { if (!G.net) return; G.pendingDraw = true; G.net.send('DRAW?'); toast('Zaproponowano remis.'); } }, { label: 'Anuluj', cls: 'ghost' }] });
+  if (G.moves.length - (G.myDrawPly ?? -10) < 2) return toast('Remis możesz zaproponować ponownie po swoim kolejnym ruchu.');
+  modal({ title: 'Zaproponować remis?', buttons: [{ label: 'Tak, zaproponuj', cls: 'primary', fn: () => { if (!G.net) return; G.pendingDraw = true; G.myDrawPly = G.moves.length; G.net.send('DRAW?'); toast('Zaproponowano remis.'); } }, { label: 'Anuluj', cls: 'ghost' }] });
 }
 function resign() {
   modal({ title: 'Poddać partię?', msg: (isBot() ? G.opp : 'Przeciwnik') + ' wygra tę partię.', buttons: [{ label: 'Poddaję się', cls: 'danger', fn: () => {
@@ -1967,7 +2004,7 @@ function showSettings(from) {
           <div><b class="small muted">Zestaw dźwięków</b><div class="chips3" style="margin-top:8px">${Object.entries(SNDSETS).map(([k, v]) => `<button class="chip ${S.sndset === k ? 'on' : ''}" data-ss="${k}">${v.name}</button>`).join('')}</div></div>
           <label class="small">Głośność: <b id="volv">${S.vol}%</b><input type="range" id="vol" min="0" max="100" value="${S.vol}"></label>
           <div class="row">${[['move', 'Ruch'], ['capture', 'Bicie'], ['check', 'Szach'], ['win', 'Wygrana'], ['notify', 'Przeciwnik']].map(([k, n]) => `<button class="chip" data-snd="${k}">${n}</button>`).join('')}</div></div>
-        <div class="card"><h3>Gra</h3>${[['hints', 'Pokazuj możliwe ruchy'], ['coords', 'Współrzędne na planszy'], ['last', 'Podświetlaj ostatni ruch'], ['animate', 'Animacja ruchów']].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
+        <div class="card"><h3>Gra</h3>${[['hints', 'Pokazuj możliwe ruchy'], ['coords', 'Współrzędne na planszy'], ['last', 'Podświetlaj ostatni ruch'], ['animate', 'Animacja ruchów'], ['drawOffers', 'Propozycje remisu od przeciwnika'], ['flipBlack', 'Odwracaj figury przeciwnika przy grze na jednym telefonie']].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
         <div class="card stack"><h3>Analiza partii</h3><div class="chips3">${LEVELS.map((l, i) => `<button class="chip ${S.level === i ? 'on' : ''}" data-lv="${i}">${l[0]}</button>`).join('')}</div>
           <p class="tiny" style="margin:0">Szybka trwa kilkanaście sekund, dokładna kilka minut — ale lepiej ocenia trudne pozycje.</p></div>
         <div class="card stack"><h3>Podgląd</h3><canvas id="spv" style="width:100%;max-width:300px;aspect-ratio:1;border-radius:8px"></canvas></div>
