@@ -9,7 +9,7 @@ const KNIGHT_D = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1],
 const KING_D = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 const ROOK_D = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const BISHOP_D = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
-const LETTERS = '  SGWHK'; // polska notacja
+let LETTERS = '  SGWHK'; // notacja (polska; wersja angielska podmienia na NBRQK)
 
 const onB = (f, r) => f >= 0 && f < 8 && r >= 0 && r < 8;
 const sqName = s => String.fromCharCode(97 + (s & 7)) + String.fromCharCode(49 + (s >> 3));
@@ -332,27 +332,33 @@ class Chess {
 // ======================================================================= ustawienia
 const DB = (() => { try { return localStorage.getItem('jchess.db') || ''; } catch (e) { return ''; } })()
   || 'https://szachy-lan-default-rtdb.europe-west1.firebasedatabase.app';
-const BOARDS = [['Klasyczny', '#f0d9b5', '#b58863'], ['Zielony', '#eeeed2', '#769656'], ['Niebieski', '#dee3e6', '#8ca2ad'],
-  ['Drewno', '#e8c99b', '#a0703f'], ['Kamień', '#d9d9d9', '#9a9a9a'], ['Fioletowy', '#e9e1f5', '#9c88c2'], ['Różowy', '#f9e1e8', '#d58ba4'],
-  ['Lodowy', '#e8f3f8', '#7fafcd'], ['Nocny', '#8a8f9c', '#4b5060'], ['Koralowy', '#fbe4d4', '#e07b65']];
+// ======================================================================= język (angielski domyślnie)
+let LANG = 'en';
+try { const j = JSON.parse(localStorage.getItem('jchess.settings') || '{}'); if (j && j.lang === 'pl') LANG = 'pl'; } catch (e) { }
+const L = (en, pl) => LANG === 'pl' ? pl : en;
+document.documentElement.lang = LANG;
+if (LANG === 'en') LETTERS = '  NBRQK'; // notacja: N B R Q K zamiast S G W H K
+const BOARDS = [[L('Classic', 'Klasyczny'), '#f0d9b5', '#b58863'], [L('Green', 'Zielony'), '#eeeed2', '#769656'], [L('Blue', 'Niebieski'), '#dee3e6', '#8ca2ad'],
+  [L('Wood', 'Drewno'), '#e8c99b', '#a0703f'], [L('Stone', 'Kamień'), '#d9d9d9', '#9a9a9a'], [L('Purple', 'Fioletowy'), '#e9e1f5', '#9c88c2'], [L('Pink', 'Różowy'), '#f9e1e8', '#d58ba4'],
+  [L('Ice', 'Lodowy'), '#e8f3f8', '#7fafcd'], [L('Night', 'Nocny'), '#8a8f9c', '#4b5060'], [L('Coral', 'Koralowy'), '#fbe4d4', '#e07b65']];
 const PRESETS = ['0+0', '60+0', '120+1', '180+0', '180+2', '300+0', '300+3', '600+0', '600+5', '900+10', '1800+0', '1800+20'];
-const LEVELS = [['Szybka', 10, 600], ['Normalna', 14, 1500], ['Dokładna', 18, 4000]];
+const LEVELS = [[L('Fast', 'Szybka'), 10, 600], [L('Normal', 'Normalna'), 14, 1500], [L('Deep', 'Dokładna'), 18, 4000]];
 // boty: nazwa, opis, Skill Level Stockfisha, głębokość, czas (ms), szansa na losowy ruch, min. czas „myślenia”
 const BOTS = [
-  { name: 'Pionek', sub: 'Początkujący', elo: '~400', skill: 0, depth: 1, ms: 60, rnd: 0.4, think: 700, piece: 'p' },
-  { name: 'Skoczek', sub: 'Amator', elo: '~800', skill: 2, depth: 2, ms: 120, rnd: 0.14, think: 800, piece: 'n' },
-  { name: 'Goniec', sub: 'Średni', elo: '~1200', skill: 6, depth: 5, ms: 300, rnd: 0.03, think: 900, piece: 'b' },
-  { name: 'Wieża', sub: 'Ekspert', elo: '~1700', skill: 12, depth: 9, ms: 700, rnd: 0, think: 900, piece: 'r' },
-  { name: 'Hetman', sub: 'Mistrz', elo: '2500+', skill: 20, depth: 22, ms: 1500, rnd: 0, think: 600, piece: 'q' }];
+  { name: L('Pawn', 'Pionek'), sub: L('Beginner', 'Początkujący'), elo: '~400', skill: 0, depth: 1, ms: 60, rnd: 0.4, think: 700, piece: 'p' },
+  { name: L('Knight', 'Skoczek'), sub: L('Casual', 'Amator'), elo: '~800', skill: 2, depth: 2, ms: 120, rnd: 0.14, think: 800, piece: 'n' },
+  { name: L('Bishop', 'Goniec'), sub: L('Club player', 'Średni'), elo: '~1200', skill: 6, depth: 5, ms: 300, rnd: 0.03, think: 900, piece: 'b' },
+  { name: L('Rook', 'Wieża'), sub: L('Strong', 'Ekspert'), elo: '~1700', skill: 12, depth: 9, ms: 700, rnd: 0, think: 900, piece: 'r' },
+  { name: L('Queen', 'Hetman'), sub: L('Master', 'Mistrz'), elo: '2500+', skill: 20, depth: 22, ms: 1500, rnd: 0, think: 600, piece: 'q' }];
 const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'maestro', bg: 'default', bgColor: '#1d2b22', dim: 35,
-  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2, drawOffers: true, flipBlack: true, premove: true };
+  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'pychess', level: 1, tc: '600+0', color: 0, pub: false, bot: 1, defv: 2, drawOffers: true, flipBlack: true, premove: true, lang: 'en' };
 let S = Object.assign({}, DEF);
 let SAVED = {};
 try { SAVED = JSON.parse(localStorage.getItem('jchess.settings') || '{}') || {}; Object.assign(S, SAVED); } catch (e) { }
 const save = () => { try { localStorage.setItem('jchess.settings', JSON.stringify(S)); } catch (e) { } };
 // nowe domyślne (figury Maestro, dźwięki PyChess) – jednorazowo także dla zapisanych ustawień
 if (SAVED.name && (SAVED.defv | 0) < 2) { S.pieces = 'maestro'; S.sndset = 'pychess'; S.defv = 2; save(); }
-if (!S.name) { S.name = 'Gracz ' + (100 + Math.floor(Math.random() * 900)); save(); }
+if (!S.name) { S.name = L('Player ', 'Gracz ') + (100 + Math.floor(Math.random() * 900)); save(); }
 let BGIMG = null;
 try { BGIMG = localStorage.getItem('jchess.bgimg'); } catch (e) { }
 const colors = () => S.board === -1 ? S.custom : BOARDS[S.board] ? [BOARDS[S.board][1], BOARDS[S.board][2]] : [BOARDS[0][1], BOARDS[0][2]];
@@ -380,14 +386,17 @@ function toast(t) {
   clearTimeout(toastT); toastT = setTimeout(() => d.remove(), 2600);
 }
 async function copyText(t) {
-  try { await navigator.clipboard.writeText(t); toast('Skopiowano'); }
-  catch (e) { modal({ title: 'Skopiuj ręcznie', html: `<input value="${esc(t)}" readonly onclick="this.select()">`, buttons: [{ label: 'OK' }] }); }
+  try { await navigator.clipboard.writeText(t); toast(L('Copied', 'Skopiowano')); }
+  catch (e) { modal({ title: L('Copy this', 'Skopiuj ręcznie'), html: `<input value="${esc(t)}" readonly onclick="this.select()">`, buttons: [{ label: 'OK' }] }); }
 }
 
 // ======================================================================= adresy podstron
 const BASE = (document.querySelector('meta[name=jc-base]') || {}).content || '/';
 const CAN_ROUTE = /^https?:$/.test(location.protocol);
-const PATHS = { home: '', online: 'online/', wait: 'online/', game: 'gra/', analysis: 'analiza/', settings: 'ustawienia/' };
+const PATHS = { home: '', online: 'online/', wait: 'online/', game: 'play/', analysis: 'analysis/', settings: 'settings/' };
+// stare polskie adresy (np. wysłane wcześniej linki) dalej działają
+const ROUTE = p => /^(settings|ustawienia)/.test(p) ? 'settings' : /^(join|dolacz)/.test(p) ? 'join' : /^online/.test(p) ? 'online'
+  : /^(play|gra)/.test(p) ? 'game' : /^(analysis|analiza)/.test(p) ? 'analysis' : 'home';
 let routing = false;
 function setPath(p, replace) {
   if (!CAN_ROUTE) return;
@@ -397,22 +406,22 @@ function setPath(p, replace) {
 }
 function routeFromUrl(fromPop) {
   let p = CAN_ROUTE ? location.pathname.slice(BASE.length).replace(/index\.html$/, '') : '';
-  const kod = CAN_ROUTE ? new URLSearchParams(location.search).get('kod') : null;
-  if (fromPop && G.screen === 'game' && inProgress() && !p.startsWith('ustawienia') && !p.startsWith('analiza')) {
+  const qs = CAN_ROUTE ? new URLSearchParams(location.search) : null, kod = qs ? qs.get('code') || qs.get('kod') : null, r = ROUTE(p);
+  if (fromPop && G.screen === 'game' && inProgress() && r !== 'settings' && r !== 'analysis') {
     history.pushState({ jc: 1 }, '', BASE + PATHS.game); confirmExit(); return;
   }
   routing = true;
   try {
-    if (p.startsWith('ustawienia')) showSettings(G.started ? 'game' : 'home');
-    else if (p.startsWith('dolacz')) { showOnline(); if (kod) joinCode(kod); }
-    else if (p.startsWith('online')) showOnline();
-    else if (p.startsWith('gra') && G.started) showGame();
-    else if (p.startsWith('analiza') && G.moves.length) showAnalysis();
+    if (r === 'settings') showSettings(G.started ? 'game' : 'home');
+    else if (r === 'join') { showOnline(); if (kod) joinCode(kod); }
+    else if (r === 'online') showOnline();
+    else if (r === 'game' && G.started) showGame();
+    else if (r === 'analysis' && G.moves.length) showAnalysis();
     else { showHome(); setPath('', true); }
   } finally { routing = false; }
 }
 window.addEventListener('popstate', () => { closeModal(); routeFromUrl(true); });
-const inviteLink = code => (CAN_ROUTE ? location.origin + BASE : 'https://babuszka123.github.io/') + 'dolacz/?kod=' + code;
+const inviteLink = code => (CAN_ROUTE ? location.origin + BASE : 'https://babuszka123.github.io/') + 'join/?code=' + code;
 
 // ======================================================================= dźwięki (syntezowane – bez plików)
 const SND = { ctx: null, noise: null, lastTick: 0 };
@@ -452,9 +461,9 @@ function bell(t, f, { len = 0.9, gain = 0.25 } = {}) {
 const SNDSETS = {
   sfx: { name: 'Lichess SFX', files: { move: 'move', capture: 'capture', castle: 'move', check: 'check', promote: 'confirmation', start: 'genericnotify',
     win: 'victory', lose: 'defeat', draw: 'draw', notify: 'genericnotify', lowtime: 'lowtime', illegal: 'error' } },
-  pychess: { name: 'Drewno (PyChess)', files: { move: 'move1', capture: 'capture2', castle: 'castle', check: 'check1', promote: 'success', start: 'start1',
+  pychess: { name: L('Wood (PyChess)', 'Drewno (PyChess)'), files: { move: 'move1', capture: 'capture2', castle: 'castle', check: 'check1', promote: 'success', start: 'start1',
     win: 'win1', lose: 'lose1', draw: 'draw1', notify: 'choice', lowtime: 'alarm', illegal: 'invalid' } },
-  synth: { name: 'Syntezowane' }
+  synth: { name: L('Simple', 'Proste') }
 };
 const bufs = {};
 const sndUrl = (set, f) => typeof JC_SOUNDS !== 'undefined' ? JC_SOUNDS[set][f] : BASE + 'assets/sounds/' + set + '/' + f + '.mp3';
@@ -534,7 +543,7 @@ function modal({ title, msg, html, buttons = [], cancelable = true, onOpen }) {
 function closeModal() { if (openModal) { openModal.remove(); openModal = null; } }
 function progress(text, onCancel) {
   modal({ html: `<div class="row"><div class="spin"></div><b>${esc(text)}</b></div>`, cancelable: false,
-    buttons: onCancel ? [{ label: 'Anuluj', cls: 'ghost', fn: onCancel }] : [] });
+    buttons: onCancel ? [{ label: L('Cancel', 'Anuluj'), cls: 'ghost', fn: onCancel }] : [] });
 }
 
 // ======================================================================= tło
@@ -562,7 +571,7 @@ function loadBgImage(file) {
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       BGIMG = c.toDataURL('image/jpeg', 0.85);
-      try { localStorage.setItem('jchess.bgimg', BGIMG); } catch (e) { toast('Zdjęcie jest za duże, by je zapamiętać na stałe'); }
+      try { localStorage.setItem('jchess.bgimg', BGIMG); } catch (e) { toast(L('This photo is too big to keep after you close the page', 'Zdjęcie jest za duże, żeby je zapamiętać na stałe')); }
       S.bg = 'image'; save(); applyBg(); showSettings();
     };
     img.src = r.result;
@@ -831,7 +840,7 @@ Board.SQ = ['rgba(235,97,80,0.8)', 'rgba(172,206,89,0.8)', 'rgba(82,176,220,0.8)
 const tcParse = s => { const [a, b] = String(s).split('+').map(Number); return { base: a || 0, inc: b || 0 }; };
 const tcLabel = s => {
   const { base, inc } = tcParse(s);
-  if (!base) return 'Bez limitu';
+  if (!base) return L('No clock', 'Bez limitu');
   const m = base % 60 === 0 ? base / 60 : (base / 60).toFixed(1);
   return inc ? `${m} | ${inc}` : `${m} min`;
 };
@@ -868,15 +877,15 @@ async function api(method, path, body, headers) {
 }
 function explain(e) {
   if (e && e.status) {
-    if (e.status === 401 || e.status === 403) return 'Baza odmówiła dostępu (reguły bazy).';
-    if (e.status === 404) return 'Nie znaleziono bazy gier.';
-    return 'Błąd serwera (' + e.status + ').';
+    if (e.status === 401 || e.status === 403) return L('The game server refused the request.', 'Serwer gry odrzucił żądanie.');
+    if (e.status === 404) return L('Game server not found.', 'Nie znaleziono serwera gry.');
+    return L('Server error', 'Błąd serwera') + ' (' + e.status + ').';
   }
-  return 'Brak połączenia z internetem.';
+  return L('No internet connection.', 'Brak internetu.');
 }
 async function serverTime() { await api('PUT', '/games/CLOCK/t', SV); return +(await api('GET', '/games/CLOCK/t')); }
 // imię z sieci: tylko tekst, bez znaków sterujących, max 24 znaki
-const cleanName = (v, def = 'Przeciwnik') => { const t = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, 24); return t || def; };
+const cleanName = (v, def = L('Opponent', 'Przeciwnik')) => { const t = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, 24); return t || def; };
 async function listPublic() {
   const now = await serverTime(), all = await api('GET', '/games/PUBLIC') || {}, out = [];
   for (const [code, m] of Object.entries(all)) {
@@ -929,14 +938,14 @@ class Online {
         }
       } else if (!this.claimed) {
         const meta = await api('GET', `/games/${this.code}/meta`);
-        if (!meta || typeof meta !== 'object') return this.fail(`Nie ma gry o kodzie ${this.code}. Sprawdź kod.`);
-        if (!await claim(this.code, this.name)) return this.fail('Do tej gry dołączył już ktoś inny.');
+        if (!meta || typeof meta !== 'object') return this.fail(L(`No game with code ${this.code}. Check the code.`, `Nie ma gry o kodzie ${this.code}. Sprawdź kod.`));
+        if (!await claim(this.code, this.name)) return this.fail(L('Someone else already joined this game.', 'Ktoś inny już dołączył do tej gry.'));
         this.secret = CLAIMS[this.code];
       }
       if (this.closed) return;
       this.stream();
       this.beat(); this.hb = setInterval(() => this.beat(), 12000);
-    } catch (e) { this.fail((this.host ? 'Nie udało się utworzyć gry. ' : 'Nie udało się dołączyć. ') + explain(e)); }
+    } catch (e) { this.fail((this.host ? L("Couldn't create the game. ", 'Nie udało się utworzyć gry. ') : L("Couldn't join. ", 'Nie udało się dołączyć. ')) + explain(e)); }
   }
   stream() {
     const es = this.es = new EventSource(`${DB}/games/${this.code}/msgs.json`);
@@ -944,7 +953,7 @@ class Online {
       let o; try { o = JSON.parse(data); } catch (e) { return; }
       if (!o) return;
       if (o.path === '/') {
-        if (o.data === null) { if (this.seen.size && ev === 'put') this.fail('Przeciwnik zakończył grę.'); }
+        if (o.data === null) { if (this.seen.size && ev === 'put') this.fail(L('Your opponent ended the game.', 'Przeciwnik zakończył grę.')); }
         else if (typeof o.data === 'object') Object.keys(o.data).sort().forEach(k => this.process(k, o.data[k]));
       } else {
         const id = o.path.slice(1);
@@ -958,12 +967,12 @@ class Online {
     };
     es.addEventListener('put', e => { this.fails = 0; handle('put', e.data); });
     es.addEventListener('patch', e => handle('patch', e.data));
-    es.addEventListener('cancel', () => this.fail('Baza zamknęła połączenie (reguły bazy?).'));
-    es.addEventListener('auth_revoked', () => this.fail('Baza zamknęła połączenie.'));
+    es.addEventListener('cancel', () => this.fail(L('The server closed the connection.', 'Serwer zamknął połączenie.')));
+    es.addEventListener('auth_revoked', () => this.fail(L('The server closed the connection.', 'Serwer zamknął połączenie.')));
     es.onerror = () => {
       if (this.closed) return;
       this.fails++;
-      if (es.readyState === 2 || (!this.connected && this.fails >= 4)) this.fail('Brak połączenia z serwerem gry.');
+      if (es.readyState === 2 || (!this.connected && this.fails >= 4)) this.fail(L("Can't reach the game server.", 'Brak połączenia z serwerem gry.'));
     };
   }
   process(id, v) {
@@ -989,11 +998,11 @@ class Online {
     this.q = this.q.then(async () => {
       for (let i = 0; i < 5; i++) {
         try { await this.post(line); return; }
-        catch (e) { if (e.status === 401 || e.status === 403) return this.fail('Baza odmówiła zapisu.'); }
+        catch (e) { if (e.status === 401 || e.status === 403) return this.fail(L('The server rejected your move.', 'Serwer odrzucił ruch.')); }
         if (this.closed) return;
         await new Promise(r => setTimeout(r, 1000 * (i + 1)));
       }
-      this.fail('Nie udało się wysłać ruchu — brak internetu.');
+      this.fail(L("Couldn't send your move. Check your internet.", 'Nie udało się wysłać ruchu. Sprawdź internet.'));
     });
   }
   // wiadomość + dowód (sekret) w osobnej, nieczytelnej gałęzi – jedna operacja
@@ -1029,7 +1038,7 @@ class Online {
 
 // ======================================================================= stan gry
 const G = {
-  screen: 'home', mode: 'local', game: new Chess(), moves: [], my: WHITE, opp: 'Przeciwnik', tc: S.tc, clock: new Clock('0+0'),
+  screen: 'home', mode: 'local', game: new Chess(), moves: [], my: WHITE, opp: L('Opponent', 'Przeciwnik'), tc: S.tc, clock: new Clock('0+0'),
   net: null, started: false, lost: false, pendingDraw: false, pendingRematch: false, peerOff: false, code: '', isPublic: false, quick: false,
   board: null, attempt: 0, botLevel: 1, botTok: 0, botEngine: null, botBusy: null, botNew: true, hint: null
 };
@@ -1104,12 +1113,12 @@ setInterval(() => {
 // zdarzenia połączenia
 const NET = {
   onConnected() { },
-  onPeer(on) { G.peerOff = !on; if (G.started && !G.game.isOver()) toast(on ? `${G.opp} znów jest online` : `${G.opp} stracił połączenie…`); updateGame(); },
+  onPeer(on) { G.peerOff = !on; if (G.started && !G.game.isOver()) toast(on ? L(`${G.opp} is back`, `${G.opp} znów jest online`) : L(`${G.opp} lost connection…`, `${G.opp} stracił połączenie…`)); updateGame(); },
   onClosed(reason) {
     G.net = null;
     if (G.started && ['game', 'analysis', 'settings'].includes(G.screen)) return lostConnection(reason);
     if (G.screen === 'wait') { showOnline(); }
-    modal({ title: 'Nie udało się', msg: reason, buttons: [{ label: 'OK' }] });
+    modal({ title: L("Couldn't connect", 'Nie udało się'), msg: reason, buttons: [{ label: 'OK' }] });
   },
   onLine(line) {
     const sp = line.indexOf(' '), cmd = sp > 0 ? line.slice(0, sp) : line, arg = sp > 0 ? line.slice(sp + 1).trim() : '';
@@ -1121,7 +1130,7 @@ const NET = {
         G.opp = cleanName(p.join(' '));
         G.net.unlist(); G.quick = false; sound('notify');
         G.net.send(`WELCOME ${G.my === WHITE ? 'b' : 'w'} ${G.tc} ${S.name}`);
-        startGame('online', G.tc); toast('Połączono z: ' + G.opp);
+        startGame('online', G.tc); toast(L('Playing against ', 'Grasz z: ') + G.opp);
         break;
       }
       case 'WELCOME': {
@@ -1130,13 +1139,13 @@ const NET = {
         G.my = p[0] === 'w' ? WHITE : BLACK;
         const tc = /^\d{1,5}\+\d{1,3}$/.test(p[1] || '') ? p[1] : '0+0';
         G.opp = cleanName(p.slice(2).join(' '));
-        sound('notify'); startGame('online', tc); toast('Połączono z: ' + G.opp + (tcParse(tc).base ? ' · ' + tcLabel(tc) : ''));
+        sound('notify'); startGame('online', tc); toast(L('Playing against ', 'Grasz z: ') + G.opp + (tcParse(tc).base ? ' · ' + tcLabel(tc) : ''));
         break;
       }
       case 'MOVE': {
         if (!G.started) return;
         const p = arg.split(' '), ms = p[1] !== undefined ? +p[1] : -1;
-        if (g.side === G.my || !playMove(fromUci(p[0]), true, isNaN(ms) ? -1 : ms)) toast('Nieprawidłowy ruch: ' + p[0]);
+        if (g.side === G.my || !playMove(fromUci(p[0]), true, isNaN(ms) ? -1 : ms)) toast(L('Illegal move received: ', 'Nieprawidłowy ruch: ') + p[0]);
         break;
       }
       case 'TIMEOUT': {
@@ -1153,26 +1162,26 @@ const NET = {
         // spam remisów: automatyczne odrzucanie (w tej partii albo na stałe)
         if (G.drawsBlocked || S.drawOffers === false) { G.net && G.net.send('DRAW_NO'); return; }
         const btns = [
-          { label: 'Przyjmij', cls: 'primary', fn: () => { if (g.isOver()) return; g.agreeDraw(); G.net && G.net.send('DRAW_OK'); updateGame(); showResult(); } },
-          { label: 'Odrzuć', cls: 'ghost', fn: () => G.net && G.net.send('DRAW_NO') }];
+          { label: L('Accept', 'Przyjmij'), cls: 'primary', fn: () => { if (g.isOver()) return; g.agreeDraw(); G.net && G.net.send('DRAW_OK'); updateGame(); showResult(); } },
+          { label: L('Decline', 'Odrzuć'), cls: 'ghost', fn: () => G.net && G.net.send('DRAW_NO') }];
         if (G.drawOffers > 1) btns.push(
-          { label: 'Odrzucaj do końca tej partii', fn: () => { G.drawsBlocked = true; G.net && G.net.send('DRAW_NO'); toast('Kolejne propozycje remisu w tej partii będą odrzucane automatycznie.'); } },
-          { label: 'Wyłącz propozycje remisu na stałe', fn: () => { S.drawOffers = false; save(); G.net && G.net.send('DRAW_NO'); toast('Wyłączono propozycje remisu. Włączysz je z powrotem w Ustawieniach.'); } });
-        modal({ title: 'Propozycja remisu', msg: `${G.opp} proponuje remis.` + (G.drawOffers > 1 ? ` (już ${G.drawOffers}. raz)` : ''), cancelable: false, buttons: btns });
+          { label: L('Decline all in this game', 'Odrzucaj do końca partii'), fn: () => { G.drawsBlocked = true; G.net && G.net.send('DRAW_NO'); toast(L('Draw offers will be declined until this game ends.', 'Kolejne propozycje remisu w tej partii będą odrzucane.')); } },
+          { label: L('Turn off draw offers', 'Wyłącz propozycje remisu'), fn: () => { S.drawOffers = false; save(); G.net && G.net.send('DRAW_NO'); toast(L('Draw offers are off. You can turn them back on in Settings.', 'Propozycje remisu wyłączone. Możesz je włączyć w Ustawieniach.')); } });
+        modal({ title: L('Draw offer', 'Propozycja remisu'), msg: L(`${G.opp} offers a draw.`, `${G.opp} proponuje remis.`) + (G.drawOffers > 1 ? L(` (${G.drawOffers} times now)`, ` (już ${G.drawOffers}. raz)`) : ''), cancelable: false, buttons: btns });
         break;
       }
       case 'DRAW_OK': if (G.pendingDraw && !g.isOver()) { g.agreeDraw(); updateGame(); showResult(); } G.pendingDraw = false; break;
-      case 'DRAW_NO': G.pendingDraw = false; toast(G.opp + ' odrzuca remis.'); break;
+      case 'DRAW_NO': G.pendingDraw = false; toast(L(G.opp + ' declined the draw.', G.opp + ' odrzuca remis.')); break;
       case 'REMATCH?':
         if (!G.started) return;
         if (G.pendingRematch) return rematch();
-        modal({ title: 'Rewanż?', msg: `${G.opp} chce zagrać jeszcze raz. Kolory zostaną zamienione.`, cancelable: false, buttons: [
-          { label: 'Gramy!', cls: 'primary', fn: () => { if (!G.net) return; G.net.send('REMATCH_OK'); rematch(); } },
-          { label: 'Nie teraz', cls: 'ghost', fn: () => G.net && G.net.send('REMATCH_NO') }] });
+        modal({ title: L('Rematch?', 'Rewanż?'), msg: L(`${G.opp} wants to play again. Colors will be swapped.`, `${G.opp} chce zagrać jeszcze raz. Kolory się zamienią.`), cancelable: false, buttons: [
+          { label: L('Play', 'Gramy'), cls: 'primary', fn: () => { if (!G.net) return; G.net.send('REMATCH_OK'); rematch(); } },
+          { label: L('Not now', 'Nie teraz'), cls: 'ghost', fn: () => G.net && G.net.send('REMATCH_NO') }] });
         break;
       case 'REMATCH_OK': if (G.pendingRematch) rematch(); break;
-      case 'REMATCH_NO': G.pendingRematch = false; toast(G.opp + ' nie chce rewanżu.'); break;
-      case 'BYE': if (G.net) G.net.close(false); G.net = null; lostConnection(G.opp + ' opuszcza grę.'); break;
+      case 'REMATCH_NO': G.pendingRematch = false; toast(L(G.opp + " doesn't want a rematch.", G.opp + ' nie chce rewanżu.')); break;
+      case 'BYE': if (G.net) G.net.close(false); G.net = null; lostConnection(L(G.opp + ' left the game.', G.opp + ' opuścił grę.')); break;
     }
   }
 };
@@ -1180,33 +1189,33 @@ function lostConnection(reason) {
   G.lost = true; G.pendingDraw = G.pendingRematch = false;
   updateGame();
   if (G.screen !== 'game') return toast(reason);
-  modal({ title: 'Koniec połączenia', msg: reason, buttons: [{ label: 'Zostań i przejrzyj partię' }, { label: 'Menu główne', cls: 'ghost', fn: showHome }] });
+  modal({ title: L('Connection lost', 'Koniec połączenia'), msg: reason, buttons: [{ label: L('Stay and look at the game', 'Zostań i przejrzyj partię') }, { label: L('Main menu', 'Menu główne'), cls: 'ghost', fn: showHome }] });
 }
 function rematch() {
   G.pendingRematch = G.pendingDraw = false;
   G.my = -G.my;
   startGame('online', G.tc);
-  toast('Rewanż! Grasz ' + (G.my === WHITE ? 'białymi.' : 'czarnymi.'));
+  toast(G.my === WHITE ? L('Rematch. You play white.', 'Rewanż. Grasz białymi.') : L('Rematch. You play black.', 'Rewanż. Grasz czarnymi.'));
 }
 
 // ======================================================================= arkusz nowej gry
 function newGameSheet(title, withColor, withVis, cb, button, withBot) {
   let color = S.color, tc = S.tc, pub = S.pub, bot = Math.max(0, Math.min(4, S.bot | 0));
   const custom = !PRESETS.includes(tc);
-  const html = `${withBot ? `<div><b class="small muted">Przeciwnik</b><div class="bots" style="margin-top:8px">${BOTS.map((b, i) => `<button class="botb" data-b="${i}"><img src="${pieceSrc('w' + b.piece)}" alt="" width="40" height="40"><b>${b.name}</b><span>${b.sub}</span><em>${b.elo}</em></button>`).join('')}</div></div>` : ''}
-    ${withVis ? `<div><b class="small muted">Kto może dołączyć</b><div class="row" style="margin-top:8px"><button class="chip vis" data-v="0">Tylko z kodem</button><button class="chip vis" data-v="1">Każdy (publiczna)</button></div>
-      <p class="tiny" style="margin:6px 0 0">Gra publiczna pojawi się na liście wolnych gier — dołączy pierwsza chętna osoba.</p></div>` : ''}
-    ${withColor ? `<div><b class="small muted">Grasz</b><div class="chips3" style="margin-top:8px">${['Białe', 'Losowo', 'Czarne'].map((n, i) => `<button class="chip col" data-c="${i}">${n}</button>`).join('')}</div></div>` : ''}
-    <div><b class="small muted">Tempo gry</b><div class="chips3" style="margin-top:8px">${PRESETS.map(p => `<button class="chip tcb" data-tc="${p}">${tcLabel(p)}</button>`).join('')}<button class="chip tcb" data-tc="custom">Własne…</button></div></div>
-    <div id="cust" ${custom ? '' : 'hidden'}><b id="custl"></b><label class="small muted">Minuty na grę<input type="range" id="cmin" min="1" max="90"></label>
-      <label class="small muted">Sekundy dodawane po każdym ruchu<input type="range" id="cinc" min="0" max="60"></label></div>
-    <p class="tiny" style="margin:0">„5 | 3” = 5 minut na całą grę + 3 sekundy po każdym ruchu.</p>`;
+  const html = `${withBot ? `<div><b class="small muted">${L('Opponent', 'Przeciwnik')}</b><div class="bots" style="margin-top:8px">${BOTS.map((b, i) => `<button class="botb" data-b="${i}"><img src="${pieceSrc('w' + b.piece)}" alt="" width="40" height="40"><b>${b.name}</b><span>${b.sub}</span><em>${b.elo}</em></button>`).join('')}</div></div>` : ''}
+    ${withVis ? `<div><b class="small muted">${L('Who can join', 'Kto może dołączyć')}</b><div class="row" style="margin-top:8px"><button class="chip vis" data-v="0">${L('Code only', 'Tylko z kodem')}</button><button class="chip vis" data-v="1">${L('Anyone (public)', 'Każdy (publiczna)')}</button></div>
+      <p class="tiny" style="margin:6px 0 0">${L('Public games show up in the open games list. The first person to click joins.', 'Gra publiczna pojawi się na liście. Dołączy pierwsza osoba, która kliknie.')}</p></div>` : ''}
+    ${withColor ? `<div><b class="small muted">${L('You play', 'Grasz')}</b><div class="chips3" style="margin-top:8px">${[L('White', 'Białe'), L('Random', 'Losowo'), L('Black', 'Czarne')].map((n, i) => `<button class="chip col" data-c="${i}">${n}</button>`).join('')}</div></div>` : ''}
+    <div><b class="small muted">${L('Time control', 'Tempo gry')}</b><div class="chips3" style="margin-top:8px">${PRESETS.map(p => `<button class="chip tcb" data-tc="${p}">${tcLabel(p)}</button>`).join('')}<button class="chip tcb" data-tc="custom">${L('Custom…', 'Własne…')}</button></div></div>
+    <div id="cust" ${custom ? '' : 'hidden'}><b id="custl"></b><label class="small muted">${L('Minutes per player', 'Minuty na grę')}<input type="range" id="cmin" min="1" max="90"></label>
+      <label class="small muted">${L('Seconds added per move', 'Sekundy dodawane po ruchu')}<input type="range" id="cinc" min="0" max="60"></label></div>
+    <p class="tiny" style="margin:0">${L('5 | 3 means 5 minutes each, plus 3 seconds per move.', '5 | 3 to 5 minut na grę i 3 sekundy po każdym ruchu.')}</p>`;
   const m = modal({ title, html, buttons: [
-    { label: button || (withColor ? 'Utwórz grę' : 'Zagraj'), cls: 'primary', fn: () => {
+    { label: button || (withColor ? L('Create game', 'Utwórz grę') : L('Play', 'Zagraj')), cls: 'primary', fn: () => {
       S.tc = tc; if (withColor) S.color = color; if (withVis) S.pub = pub; if (withBot) S.bot = bot; save();
       const c = color === 0 ? WHITE : color === 2 ? BLACK : (Math.random() < 0.5 ? WHITE : BLACK);
       cb(c, tc, pub, bot);
-    } }, { label: 'Anuluj', cls: 'ghost' }] });
+    } }, { label: L('Cancel', 'Anuluj'), cls: 'ghost' }] });
   const t0 = tcParse(tc), cmin = m.querySelector('#cmin'), cinc = m.querySelector('#cinc');
   cmin.value = Math.max(1, Math.round(t0.base / 60) || 10); cinc.value = t0.inc;
   const upd = () => {
@@ -1216,7 +1225,7 @@ function newGameSheet(title, withColor, withVis, cb, button, withBot) {
     const isCustom = !PRESETS.includes(tc);
     m.querySelectorAll('.tcb').forEach(b => b.classList.toggle('on', b.dataset.tc === tc || (isCustom && b.dataset.tc === 'custom')));
     m.querySelector('#cust').hidden = !isCustom;
-    m.querySelector('#custl').textContent = `Własne: ${cmin.value} min + ${cinc.value} s na ruch`;
+    m.querySelector('#custl').textContent = L(`Custom: ${cmin.value} min + ${cinc.value} s per move`, `Własne: ${cmin.value} min + ${cinc.value} s na ruch`);
   };
   const setCustom = () => { tc = `${cmin.value * 60}+${cinc.value}`; upd(); };
   m.querySelectorAll('.col').forEach(b => b.onclick = () => { color = +b.dataset.c; upd(); });
@@ -1239,39 +1248,39 @@ function render(html, screen) {
   app.innerHTML = `<div class="wrap screen">${html}</div>`;
   window.scrollTo(0, 0);
 }
-const appBar = (title, back, right = '') => `<div class="bar">${back ? `<button class="ibtn" id="back" aria-label="Wstecz">${ic('back')}</button>` : ''}<h2 class="grow shadow">${esc(title)}</h2>${right}</div>`;
+const appBar = (title, back, right = '') => `<div class="bar">${back ? `<button class="ibtn" id="back" aria-label="${L('Back', 'Wstecz')}">${ic('back')}</button>` : ''}<h2 class="grow shadow">${esc(title)}</h2>${right}</div>`;
 
 // ---------------------------------------------------------------- start
 function showHome() {
   cleanupNet(true); stopAnalysis(); stopBot(); closeModal();
   render(`<div class="bar"><img src="${pieceSrc('wn')}" alt="" width="44" height="44"><h1 class="grow shadow" style="font-size:30px">Jchess</h1>
-      <button class="ibtn" id="set" aria-label="Ustawienia">${ic('gear')}</button></div>
+      <button class="ibtn" id="set" aria-label="${L('Settings', 'Ustawienia')}">${ic('gear')}</button></div>
     <section class="hero">
       <div>
-        <h1 class="shadow">Szachy z przyjaciółmi — na telefonie i na komputerze</h1>
-        <p class="muted shadow" style="font-size:17px;max-width:46ch">Graj przez internet z kimś, kto ma aplikację Jchess na telefonie, z botem na jednym z 5 poziomów albo we dwoje na jednym urządzeniu. Po każdej partii darmowa analiza silnikiem Stockfish.</p>
-        <label class="name-in"><span class="muted small" style="white-space:nowrap">Twoje imię</span><input id="name" maxlength="24" value="${esc(S.name)}"></label>
+        <h1 class="shadow">${L('Play chess with friends', 'Graj w szachy ze znajomymi')}</h1>
+        <p class="muted shadow" style="font-size:17px;max-width:46ch">${L('Play online, against the computer, or with someone next to you on one screen. After a game you can go through it with Stockfish.', 'Graj przez internet, z komputerem albo we dwoje na jednym ekranie. Po partii możesz ją przejrzeć ze Stockfishem.')}</p>
+        <label class="name-in"><span class="muted small" style="white-space:nowrap">${L('Your name', 'Twoje imię')}</span><input id="name" maxlength="24" value="${esc(S.name)}"></label>
         <div class="tiles">
-          <button class="tile" id="t-online"><span class="dot" style="background:var(--green-d)">${ic('globe')}</span><span><b>Przez internet</b><span>Szybka gra, gry publiczne albo kod od znajomego</span></span><span class="chev">${ic('next')}</span></button>
-          <button class="tile" id="t-bot"><span class="dot" style="background:#7a4fb5">${ic('bot')}</span><span><b>Z komputerem</b><span>5 botów — od początkującego do mistrza</span></span><span class="chev">${ic('next')}</span></button>
-          <button class="tile" id="t-local"><span class="dot" style="background:#b0721c">${ic('screen')}</span><span><b>Na jednym urządzeniu</b><span>Dwie osoby przy jednym ekranie</span></span><span class="chev">${ic('next')}</span></button>
-          <button class="tile" id="t-set"><span class="dot" style="background:#5e5a54">${ic('palette')}</span><span><b>Wygląd i ustawienia</b><span>Plansza, figury, tło, analiza</span></span><span class="chev">${ic('next')}</span></button>
+          <button class="tile" id="t-online"><span class="dot" style="background:var(--green-d)">${ic('globe')}</span><span><b>${L('Play online', 'Przez internet')}</b><span>${L("Quick match, open games or a friend's code", 'Szybka gra, wolne gry albo kod od znajomego')}</span></span><span class="chev">${ic('next')}</span></button>
+          <button class="tile" id="t-bot"><span class="dot" style="background:#7a4fb5">${ic('bot')}</span><span><b>${L('Play the computer', 'Z komputerem')}</b><span>${L('5 levels, beginner to master', '5 poziomów, od początkującego do mistrza')}</span></span><span class="chev">${ic('next')}</span></button>
+          <button class="tile" id="t-local"><span class="dot" style="background:#b0721c">${ic('screen')}</span><span><b>${L('Pass and play', 'Na jednym urządzeniu')}</b><span>${L('Two players, one screen', 'Dwie osoby, jeden ekran')}</span></span><span class="chev">${ic('next')}</span></button>
+          <button class="tile" id="t-set"><span class="dot" style="background:#5e5a54">${ic('palette')}</span><span><b>${L('Settings', 'Ustawienia')}</b><span>${L('Board, pieces, sound, language', 'Plansza, figury, dźwięk, język')}</span></span><span class="chev">${ic('next')}</span></button>
         </div>
       </div>
-      <canvas class="preview" id="pv" aria-label="Podgląd planszy"></canvas>
+      <canvas class="preview" id="pv" aria-label="${L('Board preview', 'Podgląd planszy')}"></canvas>
     </section>`, 'home');
   const b = new Board($('#pv')); b.set(Chess.replay(['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5', 'a7a6']));
-  $('#name').onchange = e => { S.name = cleanName(e.target.value, 'Gracz'); save(); };
+  $('#name').onchange = e => { S.name = cleanName(e.target.value, L('Player', 'Gracz')); save(); };
   $('#t-online').onclick = showOnline;
-  $('#t-local').onclick = () => newGameSheet('Gra na jednym urządzeniu', false, false, (c, tc) => { G.my = WHITE; G.flip = false; startGame('local', tc); });
+  $('#t-local').onclick = () => newGameSheet(L('Pass and play', 'Gra na jednym urządzeniu'), false, false, (c, tc) => { G.my = WHITE; G.flip = false; startGame('local', tc); });
   $('#t-bot').onclick = botSheet;
   $('#t-set').onclick = $('#set').onclick = () => showSettings('home');
 }
 function botSheet() {
-  newGameSheet('Gra z komputerem', true, false, (c, tc, p, lv) => startBot(c, tc, lv), 'Zagraj', true);
+  newGameSheet(L('Play the computer', 'Gra z komputerem'), true, false, (c, tc, p, lv) => startBot(c, tc, lv), L('Play', 'Zagraj'), true);
 }
 function startBot(color, tc, lv) {
-  G.my = color; G.botLevel = lv; G.opp = 'Bot ' + BOTS[lv].name; G.code = '';
+  G.my = color; G.botLevel = lv; G.opp = L(BOTS[lv].name + ' bot', 'Bot ' + BOTS[lv].name); G.code = '';
   startGame('bot', tc);
 }
 
@@ -1279,24 +1288,24 @@ function startBot(color, tc, lv) {
 let lobbyTimer = null, lobbyBusy = false;
 function showOnline() {
   cleanupNet(true); closeModal();
-  render(`${appBar('Gra przez internet', true)}
+  render(`${appBar(L('Play online', 'Gra przez internet'), true)}
     <div class="grid2">
       <div class="stack">
         <div class="card stack"><div class="row"><span class="tile" style="padding:0;border:0;background:none"><span class="dot" style="background:var(--green-d)">${ic('user')}</span></span>
-          <div><h3>Szybka gra</h3><div class="muted small">Zagraj z losową osobą w wybranym tempie.</div></div></div>
-          <button class="btn primary wide" id="quick">Szukaj przeciwnika</button></div>
-        <div class="card stack"><h3>Utwórz grę</h3><div class="muted small">Prywatna — tylko z kodem. Publiczna — widoczna na liście dla wszystkich.</div>
-          <button class="btn wide" id="create">Utwórz grę</button></div>
-        <div class="card stack"><h3>Dołącz kodem</h3><input class="code-in" id="code" maxlength="8" placeholder="KOD" autocomplete="off">
-          <button class="btn info wide" id="join">Dołącz</button></div>
+          <div><h3>${L('Quick match', 'Szybka gra')}</h3><div class="muted small">${L('Get paired with someone at the same time control.', 'Zagraj z kimś losowym w tym samym tempie.')}</div></div></div>
+          <button class="btn primary wide" id="quick">${L('Find opponent', 'Szukaj przeciwnika')}</button></div>
+        <div class="card stack"><h3>${L('Create game', 'Utwórz grę')}</h3><div class="muted small">${L('Private: only people with the code can join. Public: anyone can join from the list.', 'Prywatna: tylko z kodem. Publiczna: każdy może dołączyć z listy.')}</div>
+          <button class="btn wide" id="create">${L('Create game', 'Utwórz grę')}</button></div>
+        <div class="card stack"><h3>${L('Join with code', 'Dołącz kodem')}</h3><input class="code-in" id="code" maxlength="8" placeholder="${L('CODE', 'KOD')}" autocomplete="off">
+          <button class="btn info wide" id="join">${L('Join', 'Dołącz')}</button></div>
       </div>
-      <div class="card"><div class="row" style="justify-content:space-between"><h3>Wolne gry publiczne</h3><div class="spin" style="width:16px;height:16px"></div></div>
-        <div id="lobby" style="margin-top:8px"><p class="muted">Wczytuję…</p></div>
-        <p class="tiny" style="margin:10px 0 0">Grasz z tymi samymi osobami co w aplikacji Jchess na telefonie.</p></div>
+      <div class="card"><div class="row" style="justify-content:space-between"><h3>${L('Open games', 'Wolne gry')}</h3><div class="spin" style="width:16px;height:16px"></div></div>
+        <div id="lobby" style="margin-top:8px"><p class="muted">${L('Loading…', 'Wczytuję…')}</p></div>
+        <p class="tiny" style="margin:10px 0 0">${L('The Jchess Android app uses the same list.', 'Aplikacja Jchess na Androida korzysta z tej samej listy.')}</p></div>
     </div>`, 'online');
   $('#back').onclick = showHome;
-  $('#quick').onclick = () => newGameSheet('Szybka gra', false, false, (c, tc) => quickMatch(tc), 'Szukaj przeciwnika');
-  $('#create').onclick = () => newGameSheet('Nowa gra online', true, true, (c, tc, pub) => hostOnline(c, tc, pub, false));
+  $('#quick').onclick = () => newGameSheet(L('Quick match', 'Szybka gra'), false, false, (c, tc) => quickMatch(tc), L('Find opponent', 'Szukaj przeciwnika'));
+  $('#create').onclick = () => newGameSheet(L('New online game', 'Nowa gra online'), true, true, (c, tc, pub) => hostOnline(c, tc, pub, false));
   $('#join').onclick = () => joinCode($('#code').value);
   $('#code').onkeydown = e => { if (e.key === 'Enter') joinCode(e.target.value); };
   clearInterval(lobbyTimer); fetchLobby(); lobbyTimer = setInterval(fetchLobby, 4000);
@@ -1310,19 +1319,19 @@ async function fetchLobby() {
   lobbyBusy = false;
   const el = $('#lobby'); if (!el || G.screen !== 'online') return;
   if (err) { el.innerHTML = `<p style="color:#ff8a80">${esc(err)}</p>`; return; }
-  if (!games.length) { el.innerHTML = '<p class="muted">Nikt teraz nie czeka. Utwórz grę publiczną albo użyj Szybkiej gry — inni zobaczą cię tutaj.</p>'; return; }
+  if (!games.length) { el.innerHTML = `<p class="muted">${L('No one is waiting right now. Create a public game or try Quick match.', 'Nikt teraz nie czeka. Utwórz grę publiczną albo spróbuj szybkiej gry.')}</p>`; return; }
   el.innerHTML = games.map(g => `<div class="lob"><span class="ava ${g.hostColor === 'w' ? 'w' : 'b'}">${esc((g.name.trim()[0] || '?').toUpperCase())}</span>
-      <div class="pinfo"><b>${esc(g.name)}</b><span class="muted small">${tcLabel(g.tc)} · grasz ${g.hostColor === 'w' ? 'czarnymi' : 'białymi'}</span></div>
-      <button class="chip on" data-code="${esc(g.code)}">Graj</button></div>`).join('');
+      <div class="pinfo"><b>${esc(g.name)}</b><span class="muted small">${tcLabel(g.tc)} · ${g.hostColor === 'w' ? L('you play black', 'grasz czarnymi') : L('you play white', 'grasz białymi')}</span></div>
+      <button class="chip on" data-code="${esc(g.code)}">${L('Play', 'Graj')}</button></div>`).join('');
   el.querySelectorAll('[data-code]').forEach(b => b.onclick = () => joinCode(b.dataset.code));
 }
 const cleanCode = s => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
 function joinCode(raw, claimed) {
   const code = cleanCode(raw);
-  if (code.length < 4) return toast('Wpisz kod gry');
+  if (code.length < 4) return toast(L('Enter a game code', 'Wpisz kod gry'));
   cleanupNet(true);
   Object.assign(G, { mode: 'online', host: false, code, started: false, lost: false, peerOff: false });
-  progress(claimed ? 'Znaleziono przeciwnika! Łączenie…' : `Łączenie z grą ${code}…`, () => { cleanupNet(false); });
+  progress(claimed ? L('Opponent found. Connecting…', 'Mamy przeciwnika. Łączę…') : L(`Joining game ${code}…`, `Łączę z grą ${code}…`), () => { cleanupNet(false); });
   G.net = new Online({ code, host: false, name: S.name, claimed: !!claimed, L: NET });
 }
 function hostOnline(color, tc, pub, quick) {
@@ -1334,24 +1343,24 @@ function hostOnline(color, tc, pub, quick) {
 }
 function showWait() {
   closeModal();
-  render(`${appBar(G.quick ? 'Szybka gra' : G.isPublic ? 'Gra publiczna' : 'Nowa gra', true)}
+  render(`${appBar(G.quick ? L('Quick match', 'Szybka gra') : G.isPublic ? L('Public game', 'Gra publiczna') : L('New game', 'Nowa gra'), true)}
     <div class="card stack" style="max-width:560px;margin:0 auto;text-align:center">
-      <b class="muted small">Kod gry</b><div class="codebox">${G.code.split('').map(c => `<b>${c}</b>`).join('')}</div>
-      <p class="muted" style="margin:0">${G.quick ? 'Szukam kogoś, kto też wybrał Szybką grę w tym tempie. Twoja gra jest też na liście publicznej.'
-        : G.isPublic ? 'Gra jest na liście wolnych gier publicznych — dołączy pierwsza chętna osoba. Możesz też wysłać kod znajomemu.'
-        : 'Wyślij ten kod znajomemu. Wpisze go w „Przez internet → Dołącz kodem” (na telefonie lub komputerze).'}</p>
-      <button class="btn primary" id="cp">${ic('copy')} Kopiuj zaproszenie z linkiem</button>
+      <b class="muted small">${L('Game code', 'Kod gry')}</b><div class="codebox">${G.code.split('').map(c => `<b>${c}</b>`).join('')}</div>
+      <p class="muted" style="margin:0">${G.quick ? L('Looking for someone who picked the same time control. Your game is also in the open games list.', 'Szukam kogoś, kto wybrał to samo tempo. Twoja gra jest też na liście wolnych gier.')
+        : G.isPublic ? L('Your game is in the open games list. You can also send the code to a friend.', 'Twoja gra jest na liście wolnych gier. Możesz też wysłać kod znajomemu.')
+        : L('Send this code or the link below to a friend.', 'Wyślij znajomemu ten kod albo link poniżej.')}</p>
+      <button class="btn primary" id="cp">${ic('copy')} ${L('Copy invite link', 'Kopiuj link z zaproszeniem')}</button>
       <div class="tiny" style="word-break:break-all">${esc(inviteLink(G.code))}</div>
-      <div class="row" style="justify-content:center;margin-top:8px"><div class="spin"></div><b>${G.quick ? 'Szukam przeciwnika…' : 'Czekam na przeciwnika…'}</b></div>
-      <div class="muted small">Grasz ${G.my === WHITE ? 'białymi' : 'czarnymi'} · tempo: ${tcLabel(G.tc)}</div>
-      <button class="btn ghost" id="cancel">Anuluj</button></div>`, 'wait');
+      <div class="row" style="justify-content:center;margin-top:8px"><div class="spin"></div><b>${G.quick ? L('Looking for an opponent…', 'Szukam przeciwnika…') : L('Waiting for your opponent…', 'Czekam na przeciwnika…')}</b></div>
+      <div class="muted small">${G.my === WHITE ? L('You play white', 'Grasz białymi') : L('You play black', 'Grasz czarnymi')} · ${tcLabel(G.tc)}</div>
+      <button class="btn ghost" id="cancel">${L('Cancel', 'Anuluj')}</button></div>`, 'wait');
   $('#back').onclick = $('#cancel').onclick = showOnline;
-  $('#cp').onclick = () => copyText(`Zagrajmy w szachy w Jchess! Kliknij: ${inviteLink(G.code)} — albo w aplikacji na telefonie wybierz Przez internet → Dołącz kodem i wpisz: ${G.code}`);
+  $('#cp').onclick = () => copyText(L(`Play chess with me on Jchess: ${inviteLink(G.code)} (game code: ${G.code})`, `Zagraj ze mną w szachy w Jchess: ${inviteLink(G.code)} (kod gry: ${G.code})`));
 }
 async function quickMatch(tc) {
   cleanupNet(true);
   const id = ++G.attempt;
-  progress(`Szukam przeciwnika (${tcLabel(tc)})…`, () => { G.attempt++; });
+  progress(L(`Looking for an opponent (${tcLabel(tc)})…`, `Szukam przeciwnika (${tcLabel(tc)})…`), () => { G.attempt++; });
   try {
     for (const g of await listPublic()) {
       if (id !== G.attempt) return;
@@ -1361,7 +1370,7 @@ async function quickMatch(tc) {
     if (id !== G.attempt) return;
     closeModal();
     hostOnline(Math.random() < 0.5 ? WHITE : BLACK, tc, true, true);
-  } catch (e) { if (id === G.attempt) modal({ title: 'Nie udało się', msg: explain(e), buttons: [{ label: 'OK' }] }); }
+  } catch (e) { if (id === G.attempt) modal({ title: L('Something went wrong', 'Nie udało się'), msg: explain(e), buttons: [{ label: 'OK' }] }); }
 }
 async function quickPoll() {
   if (G.screen !== 'wait' || !G.quick || G.started) return;
@@ -1390,10 +1399,10 @@ function boardSize(extra = BS_GAME) {
 }
 function showGame() {
   closeModal();
-  const title = G.mode === 'local' ? 'Na jednym urządzeniu' : isBot() ? `Bot ${BOTS[G.botLevel].name} · poziom ${G.botLevel + 1}` : 'Online · ' + G.code;
-  render(`${appBar(title + (tcParse(G.tc).base ? ' · ' + tcLabel(G.tc) : ''), true, `<button class="ibtn" id="set" aria-label="Ustawienia">${ic('gear')}</button>`)}
+  const title = G.mode === 'local' ? L('Pass and play', 'Na jednym urządzeniu') : isBot() ? L(`${BOTS[G.botLevel].name} bot · level ${G.botLevel + 1}`, `Bot ${BOTS[G.botLevel].name} · poziom ${G.botLevel + 1}`) : 'Online · ' + G.code;
+  render(`${appBar(title + (tcParse(G.tc).base ? ' · ' + tcLabel(G.tc) : ''), true, `<button class="ibtn" id="set" aria-label="${L('Settings', 'Ustawienia')}">${ic('gear')}</button>`)}
     <div class="game">
-      <div class="boardbox" style="--bs:${boardSize()}px"><canvas id="board" aria-label="Szachownica"></canvas></div>
+      <div class="boardbox" style="--bs:${boardSize()}px"><canvas id="board" aria-label="${L('Chessboard', 'Szachownica')}"></canvas></div>
       <div class="side">
         <div class="player" id="pTop"></div>
         <div class="status" id="status"></div>
@@ -1421,11 +1430,11 @@ function userMove(from, to) {
   else askPromotion(from, to, G.game.side, m => playMove(m, false));
 }
 function askPromotion(from, to, color, cb) {
-  const [L, D] = colors();
-  const m = modal({ title: 'Promocja pionka', msg: 'Na jaką figurę zamienić pionka?',
+  const [Lc, Dc] = colors();
+  const m = modal({ title: L('Promote pawn', 'Promocja pionka'), msg: L('Choose a piece.', 'Wybierz figurę.'),
     html: `<div class="row" style="justify-content:center">${[QUEEN, ROOK, BISHOP, KNIGHT].map((t, i) =>
-      `<button data-t="${t}" style="width:72px;height:72px;border-radius:12px;background:${i % 2 ? D : L}"><img src="${pieceSrc((color > 0 ? 'w' : 'b') + ' pnbrqk'[t])}" alt="" width="64" height="64"></button>`).join('')}</div>`,
-    buttons: [{ label: 'Anuluj', cls: 'ghost' }] });
+      `<button data-t="${t}" style="width:72px;height:72px;border-radius:12px;background:${i % 2 ? Dc : Lc}"><img src="${pieceSrc((color > 0 ? 'w' : 'b') + ' pnbrqk'[t])}" alt="" width="64" height="64"></button>`).join('')}</div>`,
+    buttons: [{ label: L('Cancel', 'Anuluj'), cls: 'ghost' }] });
   m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { closeModal(); cb({ from, to, promo: +b.dataset.t }); });
 }
 function playerHtml(name, color, active, label) {
@@ -1454,11 +1463,11 @@ function updateGame() {
   G.board.rotSide = local && S.flipBlack !== false && matchMedia('(pointer: coarse)').matches ? (G.board.flip ? WHITE : BLACK) : 0;
   G.board.draw();
   const top = local ? (G.board.flip ? WHITE : BLACK) : -G.my;
-  const nm = c => local ? (c === WHITE ? 'Białe' : 'Czarne') : c === G.my ? S.name + ' (Ty)' : G.opp;
+  const nm = c => local ? (c === WHITE ? L('White', 'Białe') : L('Black', 'Czarne')) : c === G.my ? S.name + L(' (you)', ' (ty)') : G.opp;
   for (const [id, c] of [['#pTop', top], ['#pBot', -top]]) {
     const act = !over && turn === c;
     let label = null;
-    if (!G.clock.on && act) label = local ? 'Ruch' : c === G.my ? 'Twój ruch' : 'Myśli…';
+    if (!G.clock.on && act) label = local ? L('To move', 'Ruch') : c === G.my ? L('Your move', 'Twój ruch') : L('Thinking…', 'Myśli…');
     if (!local && c !== G.my && G.peerOff && !over) label = 'offline';
     const el = $(id); el.className = 'player' + (act ? ' active' : ''); el.innerHTML = playerHtml(nm(c), c, act, label);
   }
@@ -1466,35 +1475,35 @@ function updateGame() {
   const st = $('#status');
   let txt, cls = '';
   if (over) { txt = resultTitle() + ' · ' + resultReason(); cls = 'over'; }
-  else if (!local && G.lost) { txt = 'Brak połączenia'; cls = 'check'; }
-  else if (g.inCheck()) { txt = local ? 'Szach! ' + (turn === WHITE ? 'Ruch białych' : 'Ruch czarnych') : turn === G.my ? 'Szach! Twój ruch' : 'Szach!'; cls = 'check'; }
-  else if (local) txt = turn === WHITE ? 'Ruch białych' : 'Ruch czarnych';
-  else if (turn === G.my) { txt = 'Twój ruch'; cls = 'me'; }
-  else txt = isBot() ? G.opp + ' myśli…' : G.peerOff ? 'Przeciwnik offline — czekam…' : 'Ruch przeciwnika…';
+  else if (!local && G.lost) { txt = L('Disconnected', 'Brak połączenia'); cls = 'check'; }
+  else if (g.inCheck()) { txt = local ? L('Check. ', 'Szach. ') + (turn === WHITE ? L('White to move', 'Ruch białych') : L('Black to move', 'Ruch czarnych')) : turn === G.my ? L('Check. Your move', 'Szach. Twój ruch') : L('Check', 'Szach'); cls = 'check'; }
+  else if (local) txt = turn === WHITE ? L('White to move', 'Ruch białych') : L('Black to move', 'Ruch czarnych');
+  else if (turn === G.my) { txt = L('Your move', 'Twój ruch'); cls = 'me'; }
+  else txt = isBot() ? L(G.opp + ' is thinking…', G.opp + ' myśli…') : G.peerOff ? L('Opponent is offline, waiting…', 'Przeciwnik offline, czekam…') : L("Opponent's move…", 'Ruch przeciwnika…');
   st.className = 'status ' + cls; st.textContent = txt;
   const mv = $('#moves');
   mv.innerHTML = g.san.length ? g.san.map((s, i) => (i % 2 ? '' : `<span class="n">${i / 2 + 1}.</span>`) + `<button class="${i === g.san.length - 1 ? 'cur' : ''}" tabindex="-1">${esc(s)}</button>`).join('')
-    + (g.san.length % 2 ? '<span></span>' : '') : '<span class="n" style="grid-column:1/-1">Białe zaczynają</span>';
+    + (g.san.length % 2 ? '<span></span>' : '') : `<span class="n" style="grid-column:1/-1">${L('White moves first', 'Białe zaczynają')}</span>`;
   mv.scrollTop = mv.scrollHeight;
   const acts = [];
   if (local) {
-    acts.push(['undo', 'Cofnij', undoLocal], ['flip', 'Obróć', () => { G.flip = G.board.flip = !G.board.flip; updateGame(); }]);
-    if (over && G.moves.length >= 2) acts.push(['chart', 'Analiza', showAnalysis, 1]);
-    acts.push(['plus', 'Nowa gra', () => newGameSheet(G.moves.length && !over ? 'Nowa partia? (obecna przepadnie)' : 'Nowa partia', false, false, (c, tc) => startGame('local', tc))]);
+    acts.push(['undo', L('Undo', 'Cofnij'), undoLocal], ['flip', L('Flip', 'Obróć'), () => { G.flip = G.board.flip = !G.board.flip; updateGame(); }]);
+    if (over && G.moves.length >= 2) acts.push(['chart', L('Review', 'Analiza'), showAnalysis, 1]);
+    acts.push(['plus', L('New game', 'Nowa gra'), () => newGameSheet(G.moves.length && !over ? L('New game? This one will be lost', 'Nowa partia? Obecna przepadnie') : L('New game', 'Nowa partia'), false, false, (c, tc) => startGame('local', tc))]);
   } else if (isBot()) {
-    if (!over) acts.push(['undo', 'Cofnij', undoBot], ['hint', 'Podpowiedź', botHint], ['flag', 'Poddaj się', resign]);
+    if (!over) acts.push(['undo', L('Undo', 'Cofnij'), undoBot], ['hint', L('Hint', 'Podpowiedź'), botHint], ['flag', L('Resign', 'Poddaj się'), resign]);
     else {
-      if (G.moves.length >= 2) acts.push(['chart', 'Analiza', showAnalysis, 1]);
-      acts.push(['rematch', 'Jeszcze raz', () => startBot(G.my, G.tc, G.botLevel)], ['plus', 'Nowa gra', botSheet]);
+      if (G.moves.length >= 2) acts.push(['chart', L('Review', 'Analiza'), showAnalysis, 1]);
+      acts.push(['rematch', L('Play again', 'Jeszcze raz'), () => startBot(G.my, G.tc, G.botLevel)], ['plus', L('New game', 'Nowa gra'), botSheet]);
     }
-    if (!over) acts.push(['flip', 'Obróć', () => { G.flip = !G.flip; G.board.flip = !G.board.flip; updateGame(); }]);
+    if (!over) acts.push(['flip', L('Flip', 'Obróć'), () => { G.flip = !G.flip; G.board.flip = !G.board.flip; updateGame(); }]);
   } else if (!over && !G.lost && G.net) {
-    acts.push(['draw', 'Remis', offerDraw], ['flag', 'Poddaj się', resign]);
+    acts.push(['draw', L('Draw', 'Remis'), offerDraw], ['flag', L('Resign', 'Poddaj się'), resign]);
   } else {
-    if (!G.lost && G.net) acts.push(['rematch', 'Rewanż', requestRematch, 1]);
-    if (G.moves.length >= 2) acts.push(['chart', 'Analiza', showAnalysis, 1]);
+    if (!G.lost && G.net) acts.push(['rematch', L('Rematch', 'Rewanż'), requestRematch, 1]);
+    if (G.moves.length >= 2) acts.push(['chart', L('Review', 'Analiza'), showAnalysis, 1]);
   }
-  acts.push(['exit', 'Wyjdź', confirmExit]);
+  acts.push(['exit', L('Leave', 'Wyjdź'), confirmExit]);
   const ab = $('#acts'); ab.innerHTML = '';
   acts.forEach(([i, l, fn, hi]) => { const b = document.createElement('button'); b.className = 'act' + (hi ? ' hi' : ''); b.innerHTML = ic(i) + l; b.onclick = fn; ab.appendChild(b); });
 }
@@ -1514,22 +1523,22 @@ function undoLocal() {
 }
 function resultTitle() {
   const w = G.game.winner();
-  if (!w) return 'Remis';
-  if (G.mode === 'local') return w === WHITE ? 'Wygrywają białe' : 'Wygrywają czarne';
-  return w === G.my ? 'Wygrana! 🎉' : 'Porażka';
+  if (!w) return L('Draw', 'Remis');
+  if (G.mode === 'local') return w === WHITE ? L('White wins', 'Wygrywają białe') : L('Black wins', 'Wygrywają czarne');
+  return w === G.my ? L('You won', 'Wygrana') : L('You lost', 'Porażka');
 }
 function resultReason() {
   const g = G.game;
   switch (g.status) {
-    case 'checkmate': return 'Szach-mat';
-    case 'resigned': return G.mode === 'local' ? (g.resigned === WHITE ? 'Białe' : 'Czarne') + ' poddają partię' : g.resigned === G.my ? 'Poddajesz partię' : G.opp + ' poddaje partię';
-    case 'timeout': return G.mode === 'local' ? 'Koniec czasu ' + (g.flagColor === WHITE ? 'białych' : 'czarnych') : g.flagColor === G.my ? 'Skończył ci się czas' : 'Przeciwnikowi skończył się czas';
-    case 'draw-timeout': return 'Koniec czasu, ale przeciwnik nie ma czym zamatować';
-    case 'stalemate': return 'Pat';
-    case 'draw-50': return 'Zasada 50 ruchów';
-    case 'draw-repetition': return 'Trzykrotne powtórzenie pozycji';
-    case 'draw-material': return 'Za mało materiału do mata';
-    case 'draw-agreed': return 'Remis za porozumieniem';
+    case 'checkmate': return L('Checkmate', 'Mat');
+    case 'resigned': return G.mode === 'local' ? (g.resigned === WHITE ? L('White resigned', 'Białe poddały partię') : L('Black resigned', 'Czarne poddały partię')) : g.resigned === G.my ? L('You resigned', 'Poddałeś partię') : L(G.opp + ' resigned', G.opp + ' poddał partię');
+    case 'timeout': return G.mode === 'local' ? (g.flagColor === WHITE ? L('White ran out of time', 'Białym skończył się czas') : L('Black ran out of time', 'Czarnym skończył się czas')) : g.flagColor === G.my ? L('You ran out of time', 'Skończył ci się czas') : L('Your opponent ran out of time', 'Przeciwnikowi skończył się czas');
+    case 'draw-timeout': return L('Time ran out, but the other side had no way to checkmate', 'Skończył się czas, ale druga strona nie mogła dać mata');
+    case 'stalemate': return L('Stalemate', 'Pat');
+    case 'draw-50': return L('50-move rule', 'Zasada 50 ruchów');
+    case 'draw-repetition': return L('Threefold repetition', 'Trzykrotne powtórzenie');
+    case 'draw-material': return L('Not enough material to checkmate', 'Za mało materiału do mata');
+    case 'draw-agreed': return L('Draw agreed', 'Remis za zgodą');
   }
   return '';
 }
@@ -1539,28 +1548,28 @@ function showResult() {
   sound(!w ? 'draw' : win ? 'win' : 'lose');
   const kings = w ? `<img src="${pieceSrc(w > 0 ? 'wk' : 'bk')}" width="84" height="84" alt="">` : `<img src="${pieceSrc('wk')}" width="68" height="68" alt=""><img src="${pieceSrc('bk')}" width="68" height="68" alt="">`;
   const btns = [];
-  if (G.moves.length >= 2) btns.push({ label: 'Analiza partii (za darmo)', cls: 'primary', fn: showAnalysis });
-  if (G.mode === 'local') btns.push({ label: 'Nowa gra', fn: () => startGame('local', G.tc) });
-  else if (isBot()) { btns.push({ label: 'Zagraj jeszcze raz', fn: () => startBot(G.my, G.tc, G.botLevel) }, { label: 'Inny bot', fn: botSheet }); }
-  else if (!G.lost && G.net) btns.push({ label: 'Rewanż', fn: requestRematch });
-  btns.push({ label: 'Zamknij', cls: 'ghost' });
+  if (G.moves.length >= 2) btns.push({ label: L('Review game', 'Analiza partii'), cls: 'primary', fn: showAnalysis });
+  if (G.mode === 'local') btns.push({ label: L('New game', 'Nowa gra'), fn: () => startGame('local', G.tc) });
+  else if (isBot()) { btns.push({ label: L('Play again', 'Zagraj jeszcze raz'), fn: () => startBot(G.my, G.tc, G.botLevel) }, { label: L('Different bot', 'Inny bot'), fn: botSheet }); }
+  else if (!G.lost && G.net) btns.push({ label: L('Rematch', 'Rewanż'), fn: requestRematch });
+  btns.push({ label: L('Close', 'Zamknij'), cls: 'ghost' });
   modal({ html: `<div style="text-align:center">${kings}<h2 style="font-size:28px;margin-top:6px;color:${win ? 'var(--gold)' : 'var(--ink)'}">${esc(resultTitle())}</h2><p class="muted" style="margin:4px 0 0">${esc(resultReason())}</p></div>`, buttons: btns });
 }
-function requestRematch() { if (!G.net || G.lost) return; G.pendingRematch = true; G.net.send('REMATCH?'); toast('Wysłano propozycję rewanżu…'); }
+function requestRematch() { if (!G.net || G.lost) return; G.pendingRematch = true; G.net.send('REMATCH?'); toast(L('Rematch offer sent', 'Wysłano propozycję rewanżu')); }
 function offerDraw() {
   if (!G.net || G.game.isOver()) return;
-  if (G.pendingDraw) return toast('Czekam na odpowiedź przeciwnika…');
-  if (G.moves.length - (G.myDrawPly ?? -10) < 2) return toast('Remis możesz zaproponować ponownie po swoim kolejnym ruchu.');
-  modal({ title: 'Zaproponować remis?', buttons: [{ label: 'Tak, zaproponuj', cls: 'primary', fn: () => { if (!G.net) return; G.pendingDraw = true; G.myDrawPly = G.moves.length; G.net.send('DRAW?'); toast('Zaproponowano remis.'); } }, { label: 'Anuluj', cls: 'ghost' }] });
+  if (G.pendingDraw) return toast(L('Waiting for an answer…', 'Czekam na odpowiedź…'));
+  if (G.moves.length - (G.myDrawPly ?? -10) < 2) return toast(L('You can offer a draw again after your next move.', 'Remis możesz zaproponować znowu po swoim następnym ruchu.'));
+  modal({ title: L('Offer a draw?', 'Zaproponować remis?'), buttons: [{ label: L('Offer draw', 'Zaproponuj remis'), cls: 'primary', fn: () => { if (!G.net) return; G.pendingDraw = true; G.myDrawPly = G.moves.length; G.net.send('DRAW?'); toast(L('Draw offered', 'Zaproponowano remis')); } }, { label: L('Cancel', 'Anuluj'), cls: 'ghost' }] });
 }
 function resign() {
-  modal({ title: 'Poddać partię?', msg: (isBot() ? G.opp : 'Przeciwnik') + ' wygra tę partię.', buttons: [{ label: 'Poddaję się', cls: 'danger', fn: () => {
-    if (G.game.isOver()) return; G.game.resign(G.my); G.net && G.net.send('RESIGN'); updateGame(); showResult(); } }, { label: 'Gram dalej', cls: 'ghost' }] });
+  modal({ title: L('Resign?', 'Poddać partię?'), msg: isBot() ? L(G.opp + ' will win this game.', G.opp + ' wygra tę partię.') : L('Your opponent will win this game.', 'Przeciwnik wygra tę partię.'), buttons: [{ label: L('Resign', 'Poddaję się'), cls: 'danger', fn: () => {
+    if (G.game.isOver()) return; G.game.resign(G.my); G.net && G.net.send('RESIGN'); updateGame(); showResult(); } }, { label: L('Keep playing', 'Gram dalej'), cls: 'ghost' }] });
 }
 function confirmExit() {
   if (!inProgress()) return showHome();
-  modal({ title: 'Wyjść z gry?', msg: G.mode !== 'online' ? 'Partia nie zostanie zapisana.' : 'Połączenie z przeciwnikiem zostanie zakończone.',
-    buttons: [{ label: 'Wyjdź', cls: 'danger', fn: showHome }, { label: 'Zostań', cls: 'ghost' }] });
+  modal({ title: L('Leave the game?', 'Wyjść z gry?'), msg: G.mode !== 'online' ? L("The game won't be saved.", 'Partia nie zostanie zapisana.') : L('This will end the game for both of you.', 'Gra zakończy się dla was obu.'),
+    buttons: [{ label: L('Leave', 'Wyjdź'), cls: 'danger', fn: showHome }, { label: L('Stay', 'Zostań'), cls: 'ghost' }] });
 }
 window.addEventListener('beforeunload', () => { if (G.net) G.net.close(true); });
 
@@ -1598,8 +1607,8 @@ function stopBot() {
 }
 function botEngine() {
   if (!G.botEngine) {
-    try { G.botEngine = new Uci(1); G.botEngine.w.onerror = () => { toast('Nie udało się uruchomić silnika bota'); G.botEngine = null; }; }
-    catch (e) { toast('Nie udało się uruchomić silnika bota'); return null; }
+    try { G.botEngine = new Uci(1); G.botEngine.w.onerror = () => { toast(L("Couldn't start the bot engine", 'Nie udało się uruchomić silnika bota')); G.botEngine = null; }; }
+    catch (e) { toast(L("Couldn't start the bot engine", 'Nie udało się uruchomić silnika bota')); return null; }
     G.botNew = true;
   }
   return G.botEngine;
@@ -1663,8 +1672,8 @@ function undoBot() {
 }
 async function botHint() {
   const g = G.game;
-  if (g.isOver() || g.side !== G.my) return toast('Poczekaj na swój ruch');
-  toast('Szukam najlepszego ruchu…');
+  if (g.isOver() || g.side !== G.my) return toast(L('Wait for your turn', 'Poczekaj na swój ruch'));
+  toast(L('Looking for the best move…', 'Szukam najlepszego ruchu…'));
   const key = G.moves.join(' ');
   const best = await engineBest(20, 16, 900);
   if (!best || G.moves.join(' ') !== key || !isBot()) return;
@@ -1687,11 +1696,11 @@ const whiteWin = e => e.mate ? (e.m > 0 ? 100 : 0) : winFromCp(e.cp || 0);
 const evalTxt = e => e.mate ? (e.m > 0 ? 'M' : '-M') + Math.abs(e.m) : ((e.cp > 0 ? '+' : '') + ((e.cp || 0) / 100).toFixed(1));
 const moveAcc = loss => Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * Math.max(0, loss)) - 3.1669));
 const CLS = {
-  brilliant: ['!!', 'Genialny ruch', 'to genialny ruch', '#1BACA6'], great: ['!', 'Świetny ruch', 'to świetny ruch', '#5C8BB0'],
-  best: ['★', 'Najlepszy', 'to najlepszy ruch', '#81B64C'], excellent: ['✓', 'Doskonały', 'to doskonały ruch', '#81B64C'],
-  good: ['✓', 'Dobry', 'to dobry ruch', '#95B776'], forced: ['→', 'Wymuszony', 'to jedyny możliwy ruch', '#97AF8B'],
-  inaccuracy: ['?!', 'Niedokładność', 'to niedokładność', '#F7C631'], mistake: ['?', 'Błąd', 'to błąd', '#FFA459'],
-  miss: ['✗', 'Przeoczenie', 'to przeoczona okazja', '#FF7769'], blunder: ['??', 'Gruby błąd', 'to gruby błąd', '#FA412D']
+  brilliant: ['!!', L('Brilliant', 'Genialny ruch'), L('is brilliant', 'to genialny ruch'), '#1BACA6'], great: ['!', L('Great move', 'Świetny ruch'), L('is a great move', 'to świetny ruch'), '#5C8BB0'],
+  best: ['★', L('Best', 'Najlepszy'), L('is the best move', 'to najlepszy ruch'), '#81B64C'], excellent: ['✓', L('Excellent', 'Doskonały'), L('is excellent', 'to doskonały ruch'), '#81B64C'],
+  good: ['✓', L('Good', 'Dobry'), L('is good', 'to dobry ruch'), '#95B776'], forced: ['→', L('Forced', 'Wymuszony'), L('was the only legal move', 'to jedyny możliwy ruch'), '#97AF8B'],
+  inaccuracy: ['?!', L('Inaccuracy', 'Niedokładność'), L('is an inaccuracy', 'to niedokładność'), '#F7C631'], mistake: ['?', L('Mistake', 'Błąd'), L('is a mistake', 'to błąd'), '#FFA459'],
+  miss: ['✗', L('Miss', 'Przeoczenie'), L('misses a chance', 'to przeoczona okazja'), '#FF7769'], blunder: ['??', L('Blunder', 'Gruby błąd'), L('is a blunder', 'to gruby błąd'), '#FA412D']
 };
 const NOTABLE = ['brilliant', 'great', 'inaccuracy', 'mistake', 'miss', 'blunder'];
 
@@ -1735,7 +1744,7 @@ class Review {
         refreshAnalysis();
       }
       this.finished = true;
-    } catch (e) { this.error = 'Analiza przerwana: ' + (e.message || e); }
+    } catch (e) { this.error = L('Review stopped: ', 'Analiza przerwana: ') + (e.message || e); }
     this.engine.quit();
     if (!this.cancelled) refreshAnalysis();
   }
@@ -1825,18 +1834,18 @@ function showAnalysis() {
   const same = A.run && A.run.moves.join() === G.moves.join() && A.run.level === S.level && !A.run.error;
   if (!same) { stopAnalysis(); A.run = new Review(G.moves, S.level); A.pos = 0; A.varBase = -1; A.varMoves = []; }
   A.boardKey = null;
-  render(`${appBar('Analiza partii', true, `<button class="ibtn" id="set" aria-label="Ustawienia">${ic('gear')}</button>`)}
+  render(`${appBar(L('Game review', 'Analiza partii'), true, `<button class="ibtn" id="set" aria-label="${L('Settings', 'Ustawienia')}">${ic('gear')}</button>`)}
     <div class="ana">
       <div><div class="anaboard"><div class="evalbar" id="ebar"><i></i><b></b></div>
-        <div class="boardbox" style="--bs:${boardSize(BS_ANA)}px"><canvas id="aboard" aria-label="Plansza analizy"></canvas></div></div>
+        <div class="boardbox" style="--bs:${boardSize(BS_ANA)}px"><canvas id="aboard" aria-label="${L('Review board', 'Plansza analizy')}"></canvas></div></div>
         <div class="actions" style="margin-top:10px" id="nav"></div></div>
       <div class="side">
         <div><div class="prog" id="prog"><i></i></div><div class="tiny" id="progt" style="margin-top:4px"></div></div>
         <div class="card stack" style="padding:14px"><div class="row" style="flex-wrap:nowrap"><span class="badge" id="badge"></span><h3 class="grow" id="atitle"></h3><span class="evalpill" id="aeval"></span></div>
-          <div class="muted small" id="adetail" style="white-space:pre-line"></div><button class="btn wide" id="backgame" hidden>Wróć do partii</button></div>
-        <div class="card" style="padding:14px"><div class="row" style="justify-content:space-between"><h3>Najlepsze ruchy</h3><span class="tiny" id="ldepth"></span></div>
-          <div id="lines" style="margin-top:6px"></div><p class="tiny" style="margin:6px 0 0">Kliknij linię, żeby ją zagrać, albo przesuwaj figury na planszy. Prawy przycisk (na telefonie: przytrzymaj palec) rysuje strzałki i zaznacza pola. Strzałki ← → przechodzą przez ruchy.</p></div>
-        <div class="card" style="padding:10px"><canvas class="graph" id="graph" aria-label="Wykres przewagi"></canvas></div>
+          <div class="muted small" id="adetail" style="white-space:pre-line"></div><button class="btn wide" id="backgame" hidden>${L('Back to the game', 'Wróć do partii')}</button></div>
+        <div class="card" style="padding:14px"><div class="row" style="justify-content:space-between"><h3>${L('Engine lines', 'Najlepsze ruchy')}</h3><span class="tiny" id="ldepth"></span></div>
+          <div id="lines" style="margin-top:6px"></div><p class="tiny" style="margin:6px 0 0">${L('Click a line to play it, or move pieces yourself. Right-click (or hold your finger) to draw arrows. Use ← → to step through moves.', 'Kliknij linię, żeby ją zagrać, albo przesuwaj figury sam. Prawy przycisk (na telefonie przytrzymaj palec) rysuje strzałki. Strzałki ← → przechodzą przez ruchy.')}</p></div>
+        <div class="card" style="padding:10px"><canvas class="graph" id="graph" aria-label="${L('Evaluation graph', 'Wykres przewagi')}"></canvas></div>
         <div class="card" id="summary"></div>
         <div class="card moves" id="amoves" style="max-height:340px"></div>
       </div>
@@ -1847,7 +1856,7 @@ function showAnalysis() {
   A.board = new Board($('#aboard'), { onMove: analysisMove });
   A.board.flip = G.mode !== 'local' && G.my === BLACK;
   const nav = $('#nav');
-  [['first', 'Początek', 0], ['back', 'Wstecz', 1], ['next', 'Dalej', 2], ['last', 'Koniec', 3]].forEach(([i, l, k]) => {
+  [['first', L('Start', 'Początek'), 0], ['back', L('Back', 'Wstecz'), 1], ['next', L('Next', 'Dalej'), 2], ['last', L('End', 'Koniec'), 3]].forEach(([i, l, k]) => {
     const b = document.createElement('button'); b.className = 'act'; b.innerHTML = ic(i) + l; b.onclick = () => navigate(k); nav.appendChild(b);
   });
   $('#graph').onpointerdown = e => {
@@ -1907,8 +1916,8 @@ function refreshAnalysis() {
   A.pos = Math.max(0, Math.min(A.pos, n));
   const pr = $('#prog'), pt = $('#progt');
   if (R && R.error) { pr.hidden = true; pt.textContent = R.error; pt.style.color = '#ff8a80'; }
-  else if (R && !R.finished) { pr.hidden = false; pr.querySelector('i').style.width = (R.done / (n + 1) * 100) + '%'; pt.textContent = R.done ? `Analizuję partię… ${R.done} / ${n + 1}` : 'Uruchamiam silnik Stockfish…'; }
-  else { pr.hidden = true; pt.textContent = `Stockfish 19 · analiza ${LEVELS[S.level][0].toLowerCase()}`; }
+  else if (R && !R.finished) { pr.hidden = false; pr.querySelector('i').style.width = (R.done / (n + 1) * 100) + '%'; pt.textContent = R.done ? L(`Reviewing… ${R.done} / ${n + 1}`, `Analizuję… ${R.done} / ${n + 1}`) : L('Starting Stockfish…', 'Uruchamiam Stockfisha…'); }
+  else { pr.hidden = true; pt.textContent = L(`Stockfish 19 · ${LEVELS[S.level][0].toLowerCase()} review`, `Stockfish 19 · analiza ${LEVELS[S.level][0].toLowerCase()}`); }
   const mv = shown(), bkey = mv.join(' ') + '|' + inVar;
   const ply = !inVar && R && A.pos > 0 ? R.plies[A.pos - 1] : null;
   // znaczniki ustawiamy ZANIM narysujemy planszę – inaczej przez chwilę widać stare oznaczenia
@@ -1939,21 +1948,21 @@ function refreshAnalysis() {
   $('#backgame').hidden = !inVar; title.style.color = '';
   if (inVar) {
     badge.hidden = false; badge.textContent = '✎'; badge.style.background = 'var(--blue-d)';
-    title.textContent = 'Twój wariant';
+    title.textContent = L('Your line', 'Twój wariant');
     const vs = Chess.sanLine(G.moves, A.varBase, A.varMoves, 99);
-    det.textContent = `Od ruchu ${Math.floor(A.varBase / 2) + 1} partii: ` + vs.map((s, i) => { const p = A.varBase + i; return (p % 2 === 0 ? `${p / 2 + 1}. ` : i === 0 ? `${(p + 1) / 2}… ` : '') + (i === A.varPos - 1 ? `[${s}]` : s); }).join(' ') + '\nSilnik ocenia każdy twój ruch na bieżąco.';
+    det.textContent = L(`From move ${Math.floor(A.varBase / 2) + 1}: `, `Od ruchu ${Math.floor(A.varBase / 2) + 1}: `) + vs.map((s, i) => { const p = A.varBase + i; return (p % 2 === 0 ? `${p / 2 + 1}. ` : i === 0 ? `${(p + 1) / 2}… ` : '') + (i === A.varPos - 1 ? `[${s}]` : s); }).join(' ') + L('\nThe engine checks each move as you play it.', '\nSilnik ocenia każdy twój ruch na bieżąco.');
   } else if (A.pos === 0) {
-    badge.hidden = true; title.textContent = 'Pozycja początkowa';
-    det.textContent = 'Przechodź przez ruchy przyciskami lub strzałkami, kliknij ruch na liście albo na wykresie. Możesz też sam przesuwać figury.';
+    badge.hidden = true; title.textContent = L('Starting position', 'Pozycja początkowa');
+    det.textContent = L('Step through the moves with the buttons or arrow keys, or click a move in the list or on the graph. You can also move the pieces yourself.', 'Przechodź przez ruchy przyciskami albo strzałkami, kliknij ruch na liście lub na wykresie. Możesz też sam przesuwać figury.');
   } else if (!ply) {
     badge.hidden = true; title.textContent = `${Math.ceil(A.pos / 2)}${A.pos % 2 ? '.' : '…'} ${g.san[g.san.length - 1]}`;
-    det.textContent = R && R.error ? '' : 'Ten ruch jest jeszcze analizowany…';
+    det.textContent = R && R.error ? '' : L('Still reviewing this move…', 'Ten ruch jest jeszcze analizowany…');
   } else {
     const c = CLS[ply.cls];
     badge.hidden = false; badge.textContent = c[0]; badge.style.background = c[3];
     title.textContent = `${ply.san} ${c[2]}`; title.style.color = c[3];
-    let d = `${ply.mover === WHITE ? nameOf(WHITE) : nameOf(BLACK)} · szansa wygranej ${Math.round(ply.winBefore)}% → ${Math.round(ply.winAfter)}%`;
-    if (ply.bestSan && ply.best !== ply.uci) { d += `\nLepsze było: ${ply.bestSan}` + (ply.acc < 90 ? ' (zielona strzałka)' : ''); if (ply.bestLine.length > 1) d += `\nNp.: ${ply.bestLine.join(' ')}`; }
+    let d = `${ply.mover === WHITE ? nameOf(WHITE) : nameOf(BLACK)} · ${L('winning chances', 'szansa wygranej')} ${Math.round(ply.winBefore)}% → ${Math.round(ply.winAfter)}%`;
+    if (ply.bestSan && ply.best !== ply.uci) { d += L(`\nBest was ${ply.bestSan}`, `\nLepsze było: ${ply.bestSan}`) + (ply.acc < 90 ? L(' (green arrow)', ' (zielona strzałka)') : ''); if (ply.bestLine.length > 1) d += L(`\nFor example: ${ply.bestLine.join(' ')}`, `\nNp.: ${ply.bestLine.join(' ')}`); }
     det.textContent = d;
   }
   drawGraph();
@@ -1966,9 +1975,9 @@ function refreshAnalysis() {
   $('#amoves').querySelectorAll('[data-i]').forEach(b => b.onclick = () => { exitVar(); A.pos = +b.dataset.i; refreshAnalysis(); });
   // podsumowanie
   const sm = $('#summary');
-  if (!R || R.done <= 1) sm.innerHTML = `<p class="muted" style="margin:0">${R && R.error ? 'Brak wyników.' : 'Podsumowanie pojawi się w trakcie analizy.'}</p>`;
-  else sm.innerHTML = `<h3>Podsumowanie</h3><div class="sum" style="margin-top:10px"><span></span><span class="c small muted">${esc(nameOf(WHITE))}</span><span class="c small muted">${esc(nameOf(BLACK))}</span>
-    <span class="tiny">Celność (%)</span><span class="acc" style="background:#f2f2f2;color:#262421">${R.acc(WHITE).toFixed(1)}</span><span class="acc" style="background:#403d39">${R.acc(BLACK).toFixed(1)}</span>
+  if (!R || R.done <= 1) sm.innerHTML = `<p class="muted" style="margin:0">${R && R.error ? L('No results.', 'Brak wyników.') : L('The summary will show up as the review runs.', 'Podsumowanie pojawi się w trakcie analizy.')}</p>`;
+  else sm.innerHTML = `<h3>${L('Summary', 'Podsumowanie')}</h3><div class="sum" style="margin-top:10px"><span></span><span class="c small muted">${esc(nameOf(WHITE))}</span><span class="c small muted">${esc(nameOf(BLACK))}</span>
+    <span class="tiny">${L('Accuracy (%)', 'Celność (%)')}</span><span class="acc" style="background:#f2f2f2;color:#262421">${R.acc(WHITE).toFixed(1)}</span><span class="acc" style="background:#403d39">${R.acc(BLACK).toFixed(1)}</span>
     ${Object.entries(CLS).map(([k, c]) => `<span>${c[1]}</span>` + [WHITE, BLACK].map(col => { const v = R.count(col, k); return `<span class="c" style="color:${v ? c[3] : '#5e5a55'}">${v} ${c[0]}</span>`; }).join('')).join('')}</div>`;
   // silnik na żywo
   const key = mv.join(' ');
@@ -1978,13 +1987,13 @@ function refreshAnalysis() {
   }
   refreshLines();
 }
-function nameOf(c) { return G.mode === 'local' ? (c === WHITE ? 'Białe' : 'Czarne') : c === G.my ? S.name : G.opp; }
+function nameOf(c) { return G.mode === 'local' ? (c === WHITE ? L('White', 'Białe') : L('Black', 'Czarne')) : c === G.my ? S.name : G.opp; }
 function refreshLines() {
   const el = $('#lines'); if (G.screen !== 'analysis' || !el) return;
   const mv = shown(), g = Chess.replay(mv);
-  if (g.isOver()) { el.innerHTML = '<p class="muted" style="margin:0">Koniec partii — brak ruchów.</p>'; $('#ldepth').textContent = ''; return; }
-  if (!A.live || !A.liveLines.length || A.liveKey !== mv.join(' ')) { el.innerHTML = '<div class="row"><div class="spin" style="width:16px;height:16px"></div><span class="muted">Silnik liczy…</span></div>'; $('#ldepth').textContent = ''; return; }
-  $('#ldepth').textContent = 'głębokość ' + A.liveDepth;
+  if (g.isOver()) { el.innerHTML = `<p class="muted" style="margin:0">${L('Game over. No moves left.', 'Koniec partii, brak ruchów.')}</p>`; $('#ldepth').textContent = ''; return; }
+  if (!A.live || !A.liveLines.length || A.liveKey !== mv.join(' ')) { el.innerHTML = `<div class="row"><div class="spin" style="width:16px;height:16px"></div><span class="muted">${L('Thinking…', 'Silnik liczy…')}</span></div>`; $('#ldepth').textContent = ''; return; }
+  $('#ldepth').textContent = L('depth ', 'głębokość ') + A.liveDepth;
   el.innerHTML = A.liveLines.map((l, i) => {
     const san = Chess.sanLine(mv, mv.length, l.pv, 7), ww = whiteWin(l);
     const txt = san.map((s, j) => { const p = mv.length + j; return (p % 2 === 0 ? `${p / 2 + 1}. ` : j === 0 ? `${(p + 1) / 2}… ` : '') + s; }).join(' ');
@@ -2021,34 +2030,41 @@ function showSettings(from) {
   if (from) setFrom = from;
   if (setFrom === 'analysis') stopLive();
   const y = G.screen === 'settings' ? window.scrollY : 0;
-  const [L, D] = colors();
-  render(`${appBar('Wygląd i ustawienia', true)}
+  const [Lc, Dc] = colors();
+  const PN = { classic: L('Classic', 'Klasyczne'), wood: L('Wooden', 'Drewniane'), gold: L('Gold and silver', 'Złoto i srebro'), color: L('Colorful', 'Kolorowe') };
+  render(`${appBar(L('Settings', 'Ustawienia'), true)}
     <div class="grid2">
       <div class="stack">
-        <div class="card stack"><h3>Plansza</h3><div class="swatches">${BOARDS.map((b, i) => `<button class="sw ${S.board === i ? 'on' : ''}" data-b="${i}"><span class="mini"><i style="background:${b[1]}"></i><i style="background:${b[2]}"></i><i style="background:${b[2]}"></i><i style="background:${b[1]}"></i></span>${b[0]}</button>`).join('')}</div>
-          <div class="row"><label class="row small">Własne kolory: <input type="color" id="cl" value="${S.custom[0]}"> <input type="color" id="cd" value="${S.custom[1]}"></label><button class="chip ${S.board === -1 ? 'on' : ''}" id="usecustom">Użyj własnych</button></div></div>
-        <div class="card stack"><h3>Figury</h3><div class="swatches">${Object.entries(JC_PIECES).map(([id, s]) => `<button class="sw ${S.pieces === id ? 'on' : ''}" data-p="${id}"><span class="pcs"><img src="${pieceSrc('wk', id)}" style="background:${D}" alt="" loading="lazy"><img src="${pieceSrc('bn', id)}" style="background:${L}" alt="" loading="lazy"></span>${esc(s.name)}</button>`).join('')}</div></div>
-        <div class="card stack"><h3>Tło strony</h3><div class="chips3">${[['default', 'Domyślne'], ['color', 'Kolor'], ['image', 'Zdjęcie']].map(([k, n]) => `<button class="chip ${S.bg === k ? 'on' : ''}" data-bg="${k}">${n}</button>`).join('')}</div>
-          <div class="row"><label class="row small">Kolor tła: <input type="color" id="bgc" value="${S.bgColor}"></label><label class="btn" style="min-height:40px;padding:8px 14px 11px">Wybierz zdjęcie…<input type="file" id="bgf" accept="image/*" hidden></label></div>
-          <label class="small">Przyciemnienie tła: <b id="dimv">${S.dim}%</b><input type="range" id="dim" min="0" max="85" value="${S.dim}"></label></div>
+        <div class="card stack"><h3>${L('Language', 'Język')}</h3><div class="chips3">${[['en', 'English'], ['pl', 'Polski']].map(([k, n]) => `<button class="chip ${LANG === k ? 'on' : ''}" data-lang="${k}">${n}</button>`).join('')}</div></div>
+        <div class="card stack"><h3>${L('Board', 'Plansza')}</h3><div class="swatches">${BOARDS.map((b, i) => `<button class="sw ${S.board === i ? 'on' : ''}" data-b="${i}"><span class="mini"><i style="background:${b[1]}"></i><i style="background:${b[2]}"></i><i style="background:${b[2]}"></i><i style="background:${b[1]}"></i></span>${b[0]}</button>`).join('')}</div>
+          <div class="row"><label class="row small">${L('Your own colors:', 'Własne kolory:')} <input type="color" id="cl" value="${S.custom[0]}"> <input type="color" id="cd" value="${S.custom[1]}"></label><button class="chip ${S.board === -1 ? 'on' : ''}" id="usecustom">${L('Use them', 'Użyj')}</button></div></div>
+        <div class="card stack"><h3>${L('Pieces', 'Figury')}</h3><div class="swatches">${Object.entries(JC_PIECES).map(([id, s]) => `<button class="sw ${S.pieces === id ? 'on' : ''}" data-p="${id}"><span class="pcs"><img src="${pieceSrc('wk', id)}" style="background:${Dc}" alt="" loading="lazy"><img src="${pieceSrc('bn', id)}" style="background:${Lc}" alt="" loading="lazy"></span>${esc(PN[id] || s.name)}</button>`).join('')}</div></div>
+        <div class="card stack"><h3>${L('Background', 'Tło')}</h3><div class="chips3">${[['default', L('Default', 'Domyślne')], ['color', L('Color', 'Kolor')], ['image', L('Photo', 'Zdjęcie')]].map(([k, n]) => `<button class="chip ${S.bg === k ? 'on' : ''}" data-bg="${k}">${n}</button>`).join('')}</div>
+          <div class="row"><label class="row small">${L('Color:', 'Kolor:')} <input type="color" id="bgc" value="${S.bgColor}"></label><label class="btn" style="min-height:40px;padding:8px 14px 11px">${L('Choose photo…', 'Wybierz zdjęcie…')}<input type="file" id="bgf" accept="image/*" hidden></label></div>
+          <label class="small">${L('Dim:', 'Przyciemnienie:')} <b id="dimv">${S.dim}%</b><input type="range" id="dim" min="0" max="85" value="${S.dim}"></label></div>
       </div>
       <div class="stack">
-        <div class="card stack"><h3>Dźwięki</h3><label class="toggle" style="padding-top:0"><span>Dźwięki gry</span><input type="checkbox" data-t="sound" ${S.sound ? 'checked' : ''}></label>
-          <div><b class="small muted">Zestaw dźwięków</b><div class="chips3" style="margin-top:8px">${Object.entries(SNDSETS).map(([k, v]) => `<button class="chip ${S.sndset === k ? 'on' : ''}" data-ss="${k}">${v.name}</button>`).join('')}</div></div>
-          <label class="small">Głośność: <b id="volv">${S.vol}%</b><input type="range" id="vol" min="0" max="100" value="${S.vol}"></label>
-          <div class="row">${[['move', 'Ruch'], ['capture', 'Bicie'], ['check', 'Szach'], ['win', 'Wygrana'], ['notify', 'Przeciwnik']].map(([k, n]) => `<button class="chip" data-snd="${k}">${n}</button>`).join('')}</div></div>
-        <div class="card"><h3>Gra</h3>${[['hints', 'Pokazuj możliwe ruchy'], ['coords', 'Współrzędne na planszy'], ['last', 'Podświetlaj ostatni ruch'], ['animate', 'Animacja ruchów'], ['premove', 'Premove (ruch na zapas w czasie ruchu przeciwnika)'], ['drawOffers', 'Propozycje remisu od przeciwnika'], ['flipBlack', 'Odwracaj figury przeciwnika przy grze na jednym telefonie']].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
-        <div class="card stack"><h3>Analiza partii</h3><div class="chips3">${LEVELS.map((l, i) => `<button class="chip ${S.level === i ? 'on' : ''}" data-lv="${i}">${l[0]}</button>`).join('')}</div>
-          <p class="tiny" style="margin:0">Szybka trwa kilkanaście sekund, dokładna kilka minut — ale lepiej ocenia trudne pozycje.</p></div>
-        <div class="card stack"><h3>Podgląd</h3><canvas id="spv" style="width:100%;max-width:300px;aspect-ratio:1;border-radius:8px"></canvas></div>
-        <div class="card"><h3>O stronie</h3><p class="tiny" style="margin:8px 0 0">Jchess · analiza: Stockfish 19 w wersji WebAssembly (stockfish.js, GNU GPL v3, github.com/nmrugg/stockfish.js) działa w twojej przeglądarce.
-          Zestawy figur z projektu lichess.org: Cburnett i Merida — GPL; California, Maestro, Cardinal, Staunty, Tatiana, Fresca, Gioco, Dubrovny, Horsey — CC BY-NC-SA 4.0; pozostałe wg licencji autorów. Dźwięki: zestaw SFX z lichess.org (Enigmahack, AGPLv3+) i dźwięki z programu PyChess (GPL). Dlatego Jchess jest darmowy i nie może być sprzedawany.</p></div>
+        <div class="card stack"><h3>${L('Sound', 'Dźwięk')}</h3><label class="toggle" style="padding-top:0"><span>${L('Sound effects', 'Dźwięki gry')}</span><input type="checkbox" data-t="sound" ${S.sound ? 'checked' : ''}></label>
+          <div><b class="small muted">${L('Sound set', 'Zestaw dźwięków')}</b><div class="chips3" style="margin-top:8px">${Object.entries(SNDSETS).map(([k, v]) => `<button class="chip ${S.sndset === k ? 'on' : ''}" data-ss="${k}">${v.name}</button>`).join('')}</div></div>
+          <label class="small">${L('Volume:', 'Głośność:')} <b id="volv">${S.vol}%</b><input type="range" id="vol" min="0" max="100" value="${S.vol}"></label>
+          <div class="row">${[['move', L('Move', 'Ruch')], ['capture', L('Capture', 'Bicie')], ['check', L('Check', 'Szach')], ['win', L('Win', 'Wygrana')], ['notify', L('Notify', 'Powiadomienie')]].map(([k, n]) => `<button class="chip" data-snd="${k}">${n}</button>`).join('')}</div></div>
+        <div class="card"><h3>${L('Gameplay', 'Gra')}</h3>${[['hints', L('Show legal moves', 'Pokazuj możliwe ruchy')], ['coords', L('Board coordinates', 'Współrzędne na planszy')], ['last', L('Highlight last move', 'Podświetlaj ostatni ruch')], ['animate', L('Animate moves', 'Animacja ruchów')], ['premove', L('Premoves', 'Premove (ruch na zapas)')], ['drawOffers', L('Allow draw offers', 'Propozycje remisu od przeciwnika')], ['flipBlack', L("Turn the top player's pieces around in pass and play (phones)", 'Odwracaj figury gracza naprzeciwko (gra na jednym telefonie)')]].map(([k, n]) => `<label class="toggle"><span>${n}</span><input type="checkbox" data-t="${k}" ${S[k] ? 'checked' : ''}></label>`).join('')}</div>
+        <div class="card stack"><h3>${L('Game review', 'Analiza partii')}</h3><div class="chips3">${LEVELS.map((l, i) => `<button class="chip ${S.level === i ? 'on' : ''}" data-lv="${i}">${l[0]}</button>`).join('')}</div>
+          <p class="tiny" style="margin:0">${L('Fast takes a few seconds. Deep takes a few minutes but judges sharp positions better.', 'Szybka trwa kilka sekund. Dokładna kilka minut, ale lepiej ocenia trudne pozycje.')}</p></div>
+        <div class="card stack"><h3>${L('Preview', 'Podgląd')}</h3><canvas id="spv" style="width:100%;max-width:300px;aspect-ratio:1;border-radius:8px"></canvas></div>
+        <div class="card"><h3>${L('Credits and licenses', 'Autorzy i licencje')}</h3><p class="tiny" style="margin:8px 0 0">${L(
+          'Reviews and bots use Stockfish 19, compiled to WebAssembly by stockfish.js. It runs in your browser and is licensed under the GNU GPL v3. Source code: <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">github.com/nmrugg/stockfish.js</a>.',
+          'Analiza i boty używają Stockfisha 19 w wersji WebAssembly (stockfish.js). Działa w twojej przeglądarce, licencja GNU GPL v3. Kod źródłowy: <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">github.com/nmrugg/stockfish.js</a>.')}</p>
+          <p class="tiny" style="margin:8px 0 0">${L('Piece sets from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">lichess.org</a>: Cburnett and Merida (GPL); California, Maestro, Cardinal, Staunty, Tatiana, Fresca, Gioco, Dubrovny and Horsey (CC BY-NC-SA 4.0); the rest under their authors\' licenses. Sounds: lichess SFX by Enigmahack (AGPL v3+) and PyChess (GPL).',
+          'Figury z projektu <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">lichess.org</a>: Cburnett i Merida (GPL); California, Maestro, Cardinal, Staunty, Tatiana, Fresca, Gioco, Dubrovny i Horsey (CC BY-NC-SA 4.0); pozostałe na licencjach autorów. Dźwięki: lichess SFX autorstwa Enigmahack (AGPL v3+) i PyChess (GPL).')}</p>
+          <p class="tiny" style="margin:8px 0 0">${L('Because of these licenses Jchess is free and will stay that way.', 'Przez te licencje Jchess jest darmowy i taki zostanie.')}</p></div>
       </div>
     </div>`, 'settings');
   window.scrollTo(0, y);
   new Board($('#spv')).set(Chess.replay(['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6']));
   $('#back').onclick = () => setFrom === 'game' && G.started ? showGame() : setFrom === 'analysis' && A.run ? showAnalysis() : showHome();
   const upd = () => { save(); showSettings(); };
+  document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { if (b.dataset.lang === LANG) return; S.lang = b.dataset.lang; save(); location.reload(); });
   document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { S.board = +b.dataset.b; upd(); });
   document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { S.pieces = b.dataset.p; upd(); });
   document.querySelectorAll('[data-lv]').forEach(b => b.onclick = () => { S.level = +b.dataset.lv; upd(); });

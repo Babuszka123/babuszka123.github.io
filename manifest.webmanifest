@@ -1,8 +1,8 @@
 {
  "name": "Jchess",
  "short_name": "Jchess",
- "description": "Szachy z przyjaciółmi z darmową analizą",
- "lang": "pl",
+ "description": "Play chess with friends, free game review",
+ "lang": "en",
  "start_url": "/",
  "scope": "/",
  "display": "standalone",

@@ -138,3 +138,4 @@ input[type=range]{width:100%;accent-color:var(--green)}
 .botb.on{background:var(--green-d);border-color:var(--green)}
 .botb.on b,.botb.on span{color:#fff}
 @media (max-width:520px){.bots{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.card a{color:#9fd36a}
