@@ -337,8 +337,15 @@ const BOARDS = [['Klasyczny', '#f0d9b5', '#b58863'], ['Zielony', '#eeeed2', '#76
   ['Lodowy', '#e8f3f8', '#7fafcd'], ['Nocny', '#8a8f9c', '#4b5060'], ['Koralowy', '#fbe4d4', '#e07b65']];
 const PRESETS = ['0+0', '60+0', '120+1', '180+0', '180+2', '300+0', '300+3', '600+0', '600+5', '900+10', '1800+0', '1800+20'];
 const LEVELS = [['Szybka', 10, 600], ['Normalna', 14, 1500], ['Dokładna', 18, 4000]];
+// boty: nazwa, opis, Skill Level Stockfisha, głębokość, czas (ms), szansa na losowy ruch, min. czas „myślenia”
+const BOTS = [
+  { name: 'Pionek', sub: 'Początkujący', elo: '~400', skill: 0, depth: 1, ms: 60, rnd: 0.4, think: 700, piece: 'p' },
+  { name: 'Skoczek', sub: 'Amator', elo: '~800', skill: 2, depth: 2, ms: 120, rnd: 0.14, think: 800, piece: 'n' },
+  { name: 'Goniec', sub: 'Średni', elo: '~1200', skill: 6, depth: 5, ms: 300, rnd: 0.03, think: 900, piece: 'b' },
+  { name: 'Wieża', sub: 'Ekspert', elo: '~1700', skill: 12, depth: 9, ms: 700, rnd: 0, think: 900, piece: 'r' },
+  { name: 'Hetman', sub: 'Mistrz', elo: '2500+', skill: 20, depth: 22, ms: 1500, rnd: 0, think: 600, piece: 'q' }];
 const DEF = { name: '', board: 0, custom: ['#f0d9b5', '#b58863'], pieces: 'classic', bg: 'default', bgColor: '#1d2b22', dim: 35,
-  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'sfx', level: 1, tc: '600+0', color: 0, pub: false };
+  hints: true, coords: true, last: true, animate: true, sound: true, vol: 70, sndset: 'sfx', level: 1, tc: '600+0', color: 0, pub: false, bot: 1 };
 let S = Object.assign({}, DEF);
 try { Object.assign(S, JSON.parse(localStorage.getItem('jchess.settings') || '{}')); } catch (e) { }
 const save = () => { try { localStorage.setItem('jchess.settings', JSON.stringify(S)); } catch (e) { } };
@@ -357,6 +364,7 @@ const ICONS = {
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>', flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   draw: '<text x="12" y="17" text-anchor="middle" font-size="15" font-weight="800" fill="currentColor" stroke="none">½</text>',
   chart: '<path d="M3 20h18M5 16l5-5 4 3 6-7"/>', exit: '<path d="M14 4H5v16h9M10 12h11M18 9l3 3-3 3"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01M9 17h6"/><circle cx="12" cy="3.5" r="1"/>', hint: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6 8-6s7 1.5 8 6"/>', rematch: '<path d="M20 12a8 8 0 01-14 5M4 12a8 8 0 0114-5"/><path d="M18 3v4h-4M6 21v-4h4"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 011-1h9"/>', first: '<path d="M6 5v14M18 5l-7 7 7 7"/>',
   last: '<path d="M18 5v14M6 5l7 7-7 7"/>', next: '<path d="M9 5l7 7-7 7"/>', palette: '<path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-1-1.6-1-2.6S14 15 15.5 15H18a3 3 0 003-3c0-5-4-9-9-9z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>'
@@ -387,7 +395,7 @@ function setPath(p, replace) {
 function routeFromUrl(fromPop) {
   let p = CAN_ROUTE ? location.pathname.slice(BASE.length).replace(/index\.html$/, '') : '';
   const kod = CAN_ROUTE ? new URLSearchParams(location.search).get('kod') : null;
-  if (fromPop && G.screen === 'game' && (G.mode === 'local' ? G.moves.length && !G.game.isOver() : G.net && !G.lost) && !p.startsWith('ustawienia') && !p.startsWith('analiza')) {
+  if (fromPop && G.screen === 'game' && inProgress() && !p.startsWith('ustawienia') && !p.startsWith('analiza')) {
     history.pushState({ jc: 1 }, '', BASE + PATHS.game); confirmExit(); return;
   }
   routing = true;
@@ -981,8 +989,10 @@ class Online {
 const G = {
   screen: 'home', mode: 'local', game: new Chess(), moves: [], my: WHITE, opp: 'Przeciwnik', tc: S.tc, clock: new Clock('0+0'),
   net: null, started: false, lost: false, pendingDraw: false, pendingRematch: false, peerOff: false, code: '', isPublic: false, quick: false,
-  board: null, attempt: 0
+  board: null, attempt: 0, botLevel: 1, botTok: 0, botEngine: null, botBusy: null, botNew: true, hint: null
 };
+const isBot = () => G.mode === 'bot';
+const inProgress = () => G.mode === 'local' || isBot() ? G.moves.length && !G.game.isOver() : G.net && !G.lost;
 
 function cleanupNet(bye) {
   if (G.net) G.net.close(bye);
@@ -991,12 +1001,14 @@ function cleanupNet(bye) {
 function startGame(mode, tc) {
   G.mode = mode; G.tc = tc; G.game = new Chess(); G.moves = []; G.clock = new Clock(tc);
   G.started = true; G.lost = false; G.pendingDraw = G.pendingRematch = false; G.lowWarned = 0;
+  G.botTok++; G.botNew = true; G.hint = null;
   closeModal(); stopAnalysis(); showGame(); sound('start');
+  if (isBot()) botThink();
 }
 function playMove(m, remote, remoteMs = -1) {
   const g = G.game, mover = g.side;
   if (!m || !g.move(m)) return false;
-  G.moves.push(toUci(m));
+  G.moves.push(toUci(m)); G.hint = null;
   const now = performance.now(), left = G.clock.onMove(mover, now);
   if (remote && remoteMs >= 0 && G.clock.on) G.clock.set(mover, remoteMs);
   if (g.isOver()) G.clock.stop(now);
@@ -1007,12 +1019,13 @@ function playMove(m, remote, remoteMs = -1) {
   moveSound(g);
   updateGame();
   if (g.isOver()) setTimeout(showResult, 450);
+  else if (isBot() && g.side !== G.my) botThink();
   return true;
 }
 function onFlag(color, broadcast) {
   if (G.game.isOver()) return;
   G.game.flag(color);
-  G.clock.stop(); if (color === G.my || G.mode === 'local') G.clock.set(color, 0);
+  G.clock.stop(); if (color === G.my || G.mode !== 'online') G.clock.set(color, 0);
   if (broadcast && G.net) G.net.send('TIMEOUT ' + (color === WHITE ? 'w' : 'b'));
   updateGame(); showResult();
 }
@@ -1026,7 +1039,7 @@ setInterval(() => {
     if (set && set.files && set.files.lowtime) { if (G.lowWarned !== mine) { G.lowWarned = mine; sound('lowtime'); } }
     else if (now - SND.lastTick > 1000) { SND.lastTick = now; sound('tick'); }
   }
-  if (G.mode === 'local') { const f = G.clock.flagged(now, 0); if (f) onFlag(f, false); }
+  if (G.mode !== 'online') { const f = G.clock.flagged(now, 0); if (f) onFlag(f, false); }
   else if (!G.lost) {
     if (G.clock.flagged(now, 0) === G.my) onFlag(G.my, true);
     else if (G.clock.flagged(now, 3000) === -G.my) onFlag(-G.my, true);
@@ -1108,10 +1121,11 @@ function rematch() {
 }
 
 // ======================================================================= arkusz nowej gry
-function newGameSheet(title, withColor, withVis, cb, button) {
-  let color = S.color, tc = S.tc, pub = S.pub;
+function newGameSheet(title, withColor, withVis, cb, button, withBot) {
+  let color = S.color, tc = S.tc, pub = S.pub, bot = Math.max(0, Math.min(4, S.bot | 0));
   const custom = !PRESETS.includes(tc);
-  const html = `${withVis ? `<div><b class="small muted">Kto może dołączyć</b><div class="row" style="margin-top:8px"><button class="chip vis" data-v="0">Tylko z kodem</button><button class="chip vis" data-v="1">Każdy (publiczna)</button></div>
+  const html = `${withBot ? `<div><b class="small muted">Przeciwnik</b><div class="bots" style="margin-top:8px">${BOTS.map((b, i) => `<button class="botb" data-b="${i}"><img src="${pieceSrc('w' + b.piece)}" alt="" width="40" height="40"><b>${b.name}</b><span>${b.sub}</span><em>${b.elo}</em></button>`).join('')}</div></div>` : ''}
+    ${withVis ? `<div><b class="small muted">Kto może dołączyć</b><div class="row" style="margin-top:8px"><button class="chip vis" data-v="0">Tylko z kodem</button><button class="chip vis" data-v="1">Każdy (publiczna)</button></div>
       <p class="tiny" style="margin:6px 0 0">Gra publiczna pojawi się na liście wolnych gier — dołączy pierwsza chętna osoba.</p></div>` : ''}
     ${withColor ? `<div><b class="small muted">Grasz</b><div class="chips3" style="margin-top:8px">${['Białe', 'Losowo', 'Czarne'].map((n, i) => `<button class="chip col" data-c="${i}">${n}</button>`).join('')}</div></div>` : ''}
     <div><b class="small muted">Tempo gry</b><div class="chips3" style="margin-top:8px">${PRESETS.map(p => `<button class="chip tcb" data-tc="${p}">${tcLabel(p)}</button>`).join('')}<button class="chip tcb" data-tc="custom">Własne…</button></div></div>
@@ -1120,15 +1134,16 @@ function newGameSheet(title, withColor, withVis, cb, button) {
     <p class="tiny" style="margin:0">„5 | 3” = 5 minut na całą grę + 3 sekundy po każdym ruchu.</p>`;
   const m = modal({ title, html, buttons: [
     { label: button || (withColor ? 'Utwórz grę' : 'Zagraj'), cls: 'primary', fn: () => {
-      S.tc = tc; if (withColor) S.color = color; if (withVis) S.pub = pub; save();
+      S.tc = tc; if (withColor) S.color = color; if (withVis) S.pub = pub; if (withBot) S.bot = bot; save();
       const c = color === 0 ? WHITE : color === 2 ? BLACK : (Math.random() < 0.5 ? WHITE : BLACK);
-      cb(c, tc, pub);
+      cb(c, tc, pub, bot);
     } }, { label: 'Anuluj', cls: 'ghost' }] });
   const t0 = tcParse(tc), cmin = m.querySelector('#cmin'), cinc = m.querySelector('#cinc');
   cmin.value = Math.max(1, Math.round(t0.base / 60) || 10); cinc.value = t0.inc;
   const upd = () => {
     m.querySelectorAll('.col').forEach(b => b.classList.toggle('on', +b.dataset.c === color));
     m.querySelectorAll('.vis').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === pub));
+    m.querySelectorAll('.botb').forEach(b => b.classList.toggle('on', +b.dataset.b === bot));
     const isCustom = !PRESETS.includes(tc);
     m.querySelectorAll('.tcb').forEach(b => b.classList.toggle('on', b.dataset.tc === tc || (isCustom && b.dataset.tc === 'custom')));
     m.querySelector('#cust').hidden = !isCustom;
@@ -1137,6 +1152,7 @@ function newGameSheet(title, withColor, withVis, cb, button) {
   const setCustom = () => { tc = `${cmin.value * 60}+${cinc.value}`; upd(); };
   m.querySelectorAll('.col').forEach(b => b.onclick = () => { color = +b.dataset.c; upd(); });
   m.querySelectorAll('.vis').forEach(b => b.onclick = () => { pub = b.dataset.v === '1'; upd(); });
+  m.querySelectorAll('.botb').forEach(b => b.onclick = () => { bot = +b.dataset.b; upd(); });
   m.querySelectorAll('.tcb').forEach(b => b.onclick = () => {
     if (b.dataset.tc === 'custom') { tc = `${cmin.value * 60}+${cinc.value}`; if (PRESETS.includes(tc)) { cmin.value = 7; tc = `420+${cinc.value}`; } }
     else tc = b.dataset.tc;
@@ -1158,16 +1174,17 @@ const appBar = (title, back, right = '') => `<div class="bar">${back ? `<button 
 
 // ---------------------------------------------------------------- start
 function showHome() {
-  cleanupNet(true); stopAnalysis(); closeModal();
+  cleanupNet(true); stopAnalysis(); stopBot(); closeModal();
   render(`<div class="bar"><img src="${pieceSrc('wn')}" alt="" width="44" height="44"><h1 class="grow shadow" style="font-size:30px">Jchess</h1>
       <button class="ibtn" id="set" aria-label="Ustawienia">${ic('gear')}</button></div>
     <section class="hero">
       <div>
         <h1 class="shadow">Szachy z przyjaciółmi — na telefonie i na komputerze</h1>
-        <p class="muted shadow" style="font-size:17px;max-width:46ch">Graj przez internet z kimś, kto ma aplikację Jchess na telefonie, albo zagraj we dwoje na jednym urządzeniu. Po każdej partii darmowa analiza silnikiem Stockfish.</p>
+        <p class="muted shadow" style="font-size:17px;max-width:46ch">Graj przez internet z kimś, kto ma aplikację Jchess na telefonie, z botem na jednym z 5 poziomów albo we dwoje na jednym urządzeniu. Po każdej partii darmowa analiza silnikiem Stockfish.</p>
         <label class="name-in"><span class="muted small" style="white-space:nowrap">Twoje imię</span><input id="name" maxlength="24" value="${esc(S.name)}"></label>
         <div class="tiles">
           <button class="tile" id="t-online"><span class="dot" style="background:var(--green-d)">${ic('globe')}</span><span><b>Przez internet</b><span>Szybka gra, gry publiczne albo kod od znajomego</span></span><span class="chev">${ic('next')}</span></button>
+          <button class="tile" id="t-bot"><span class="dot" style="background:#7a4fb5">${ic('bot')}</span><span><b>Z komputerem</b><span>5 botów — od początkującego do mistrza</span></span><span class="chev">${ic('next')}</span></button>
           <button class="tile" id="t-local"><span class="dot" style="background:#b0721c">${ic('screen')}</span><span><b>Na jednym urządzeniu</b><span>Dwie osoby przy jednym ekranie</span></span><span class="chev">${ic('next')}</span></button>
           <button class="tile" id="t-set"><span class="dot" style="background:#5e5a54">${ic('palette')}</span><span><b>Wygląd i ustawienia</b><span>Plansza, figury, tło, analiza</span></span><span class="chev">${ic('next')}</span></button>
         </div>
@@ -1178,7 +1195,15 @@ function showHome() {
   $('#name').onchange = e => { S.name = e.target.value.trim().slice(0, 24) || 'Gracz'; save(); };
   $('#t-online').onclick = showOnline;
   $('#t-local').onclick = () => newGameSheet('Gra na jednym urządzeniu', false, false, (c, tc) => { G.my = WHITE; G.flip = false; startGame('local', tc); });
+  $('#t-bot').onclick = botSheet;
   $('#t-set').onclick = $('#set').onclick = () => showSettings('home');
+}
+function botSheet() {
+  newGameSheet('Gra z komputerem', true, false, (c, tc, p, lv) => startBot(c, tc, lv), 'Zagraj', true);
+}
+function startBot(color, tc, lv) {
+  G.my = color; G.botLevel = lv; G.opp = 'Bot ' + BOTS[lv].name; G.code = '';
+  startGame('bot', tc);
 }
 
 // ---------------------------------------------------------------- online
@@ -1292,7 +1317,7 @@ function boardSize(extra = 420) {
 }
 function showGame() {
   closeModal();
-  const title = G.mode === 'local' ? 'Na jednym urządzeniu' : 'Online · ' + G.code;
+  const title = G.mode === 'local' ? 'Na jednym urządzeniu' : isBot() ? `Bot ${BOTS[G.botLevel].name} · poziom ${G.botLevel + 1}` : 'Online · ' + G.code;
   render(`${appBar(title + (tcParse(G.tc).base ? ' · ' + tcLabel(G.tc) : ''), true, `<button class="ibtn" id="set" aria-label="Ustawienia">${ic('gear')}</button>`)}
     <div class="game">
       <div class="boardbox" style="--bs:${boardSize()}px"><canvas id="board" aria-label="Szachownica"></canvas></div>
@@ -1305,7 +1330,7 @@ function showGame() {
       </div>
     </div>`, 'game');
   G.board = new Board($('#board'), { onMove: userMove });
-  G.board.flip = G.mode === 'local' ? !!G.flip : G.my === BLACK;
+  G.board.flip = G.mode === 'local' ? !!G.flip : isBot() ? (G.my === BLACK) !== !!G.flip : G.my === BLACK;
   G.board.set(G.game);
   $('#back').onclick = confirmExit;
   $('#set').onclick = () => showSettings('game');
@@ -1349,7 +1374,8 @@ function updateGame() {
   if (G.game.isOver()) G.clock.stop();
   if (G.screen !== 'game' || !G.board) return;
   const g = G.game, local = G.mode === 'local', over = g.isOver(), turn = g.side;
-  G.board.movable = local ? (over ? 0 : turn) : (!over && !G.lost && G.net ? G.my : 0);
+  G.board.movable = local ? (over ? 0 : turn) : isBot() ? (over ? 0 : G.my) : (!over && !G.lost && G.net ? G.my : 0);
+  G.board.arrow = G.hint && !over ? { from: G.hint.from, to: G.hint.to, color: '#2f7fd0c8' } : null;
   G.board.draw();
   const top = local ? (G.board.flip ? WHITE : BLACK) : -G.my;
   const nm = c => local ? (c === WHITE ? 'Białe' : 'Czarne') : c === G.my ? S.name + ' (Ty)' : G.opp;
@@ -1368,7 +1394,7 @@ function updateGame() {
   else if (g.inCheck()) { txt = local ? 'Szach! ' + (turn === WHITE ? 'Ruch białych' : 'Ruch czarnych') : turn === G.my ? 'Szach! Twój ruch' : 'Szach!'; cls = 'check'; }
   else if (local) txt = turn === WHITE ? 'Ruch białych' : 'Ruch czarnych';
   else if (turn === G.my) { txt = 'Twój ruch'; cls = 'me'; }
-  else txt = G.peerOff ? 'Przeciwnik offline — czekam…' : 'Ruch przeciwnika…';
+  else txt = isBot() ? G.opp + ' myśli…' : G.peerOff ? 'Przeciwnik offline — czekam…' : 'Ruch przeciwnika…';
   st.className = 'status ' + cls; st.textContent = txt;
   const mv = $('#moves');
   mv.innerHTML = g.san.length ? g.san.map((s, i) => (i % 2 ? '' : `<span class="n">${i / 2 + 1}.</span>`) + `<button class="${i === g.san.length - 1 ? 'cur' : ''}" tabindex="-1">${esc(s)}</button>`).join('')
@@ -1379,6 +1405,13 @@ function updateGame() {
     acts.push(['undo', 'Cofnij', undoLocal], ['flip', 'Obróć', () => { G.flip = G.board.flip = !G.board.flip; updateGame(); }]);
     if (over && G.moves.length >= 2) acts.push(['chart', 'Analiza', showAnalysis, 1]);
     acts.push(['plus', 'Nowa gra', () => newGameSheet(G.moves.length && !over ? 'Nowa partia? (obecna przepadnie)' : 'Nowa partia', false, false, (c, tc) => startGame('local', tc))]);
+  } else if (isBot()) {
+    if (!over) acts.push(['undo', 'Cofnij', undoBot], ['hint', 'Podpowiedź', botHint], ['flag', 'Poddaj się', resign]);
+    else {
+      if (G.moves.length >= 2) acts.push(['chart', 'Analiza', showAnalysis, 1]);
+      acts.push(['rematch', 'Jeszcze raz', () => startBot(G.my, G.tc, G.botLevel)], ['plus', 'Nowa gra', botSheet]);
+    }
+    if (!over) acts.push(['flip', 'Obróć', () => { G.flip = !G.flip; G.board.flip = !G.board.flip; updateGame(); }]);
   } else if (!over && !G.lost && G.net) {
     acts.push(['draw', 'Remis', offerDraw], ['flag', 'Poddaj się', resign]);
   } else {
@@ -1432,6 +1465,7 @@ function showResult() {
   const btns = [];
   if (G.moves.length >= 2) btns.push({ label: 'Analiza partii (za darmo)', cls: 'primary', fn: showAnalysis });
   if (G.mode === 'local') btns.push({ label: 'Nowa gra', fn: () => startGame('local', G.tc) });
+  else if (isBot()) { btns.push({ label: 'Zagraj jeszcze raz', fn: () => startBot(G.my, G.tc, G.botLevel) }, { label: 'Inny bot', fn: botSheet }); }
   else if (!G.lost && G.net) btns.push({ label: 'Rewanż', fn: requestRematch });
   btns.push({ label: 'Zamknij', cls: 'ghost' });
   modal({ html: `<div style="text-align:center">${kings}<h2 style="font-size:28px;margin-top:6px;color:${win ? 'var(--gold)' : 'var(--ink)'}">${esc(resultTitle())}</h2><p class="muted" style="margin:4px 0 0">${esc(resultReason())}</p></div>`, buttons: btns });
@@ -1443,13 +1477,12 @@ function offerDraw() {
   modal({ title: 'Zaproponować remis?', buttons: [{ label: 'Tak, zaproponuj', cls: 'primary', fn: () => { if (!G.net) return; G.pendingDraw = true; G.net.send('DRAW?'); toast('Zaproponowano remis.'); } }, { label: 'Anuluj', cls: 'ghost' }] });
 }
 function resign() {
-  modal({ title: 'Poddać partię?', msg: 'Przeciwnik wygra tę partię.', buttons: [{ label: 'Poddaję się', cls: 'danger', fn: () => {
+  modal({ title: 'Poddać partię?', msg: (isBot() ? G.opp : 'Przeciwnik') + ' wygra tę partię.', buttons: [{ label: 'Poddaję się', cls: 'danger', fn: () => {
     if (G.game.isOver()) return; G.game.resign(G.my); G.net && G.net.send('RESIGN'); updateGame(); showResult(); } }, { label: 'Gram dalej', cls: 'ghost' }] });
 }
 function confirmExit() {
-  const need = G.mode === 'local' ? G.moves.length && !G.game.isOver() : G.net && !G.lost;
-  if (!need) return showHome();
-  modal({ title: 'Wyjść z gry?', msg: G.mode === 'local' ? 'Partia nie zostanie zapisana.' : 'Połączenie z przeciwnikiem zostanie zakończone.',
+  if (!inProgress()) return showHome();
+  modal({ title: 'Wyjść z gry?', msg: G.mode !== 'online' ? 'Partia nie zostanie zapisana.' : 'Połączenie z przeciwnikiem zostanie zakończone.',
     buttons: [{ label: 'Wyjdź', cls: 'danger', fn: showHome }, { label: 'Zostań', cls: 'ghost' }] });
 }
 window.addEventListener('beforeunload', () => { if (G.net) G.net.close(true); });
@@ -1480,6 +1513,87 @@ class Uci {
   wait(prefix) { return new Promise(res => { const f = l => { if (l.startsWith(prefix)) { this.h.delete(f); res(l); } }; this.h.add(f); }); }
   quit() { try { this.w.terminate(); } catch (e) { } }
 }
+// ---------------------------------------------------------------- bot
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function stopBot() {
+  G.botTok++; G.botBusy = null; G.hint = null;
+  if (G.botEngine) G.botEngine.quit(); G.botEngine = null;
+}
+function botEngine() {
+  if (!G.botEngine) {
+    try { G.botEngine = new Uci(1); G.botEngine.w.onerror = () => { toast('Nie udało się uruchomić silnika bota'); G.botEngine = null; }; }
+    catch (e) { toast('Nie udało się uruchomić silnika bota'); return null; }
+    G.botNew = true;
+  }
+  return G.botEngine;
+}
+// jedno zapytanie do silnika naraz; poprzednie jest przerywane
+async function engineBest(skill, depth, ms) {
+  const e = botEngine(); if (!e) return null;
+  if (G.botBusy) { e.send('stop'); try { await G.botBusy; } catch (x) { } }
+  const moves = G.moves.slice();
+  const p = (async () => {
+    await e.ready;
+    if (G.botNew) { e.send('ucinewgame'); G.botNew = false; }
+    e.send('setoption name Skill Level value ' + skill);
+    e.send('position startpos' + (moves.length ? ' moves ' + moves.join(' ') : ''));
+    e.send(`go depth ${depth} movetime ${ms}`);
+    const l = await e.wait('bestmove');
+    const b = l.split(' ')[1];
+    return b && b !== '(none)' ? b : null;
+  })();
+  G.botBusy = p;
+  const r = await p;
+  if (G.botBusy === p) G.botBusy = null;
+  return r;
+}
+async function botThink() {
+  const g = G.game;
+  if (!isBot() || g.isOver() || g.side === G.my) return;
+  const tok = ++G.botTok, lv = BOTS[G.botLevel], t0 = performance.now(), key = G.moves.join(' ');
+  let uci = null;
+  const legal = g.legal();
+  if (legal.length === 1) uci = toUci(legal[0]);
+  else if (Math.random() < lv.rnd) {
+    // słabsze boty czasem grają „ludzki” przypadkowy ruch (chętniej bicia)
+    const caps = legal.filter(m => g.b[m.to]);
+    const pool = caps.length && Math.random() < 0.5 ? caps : legal;
+    uci = toUci(pool[Math.floor(Math.random() * pool.length)]);
+  } else {
+    let ms = lv.ms;
+    if (G.clock.on) ms = Math.max(30, Math.min(ms, G.clock.left(-G.my, performance.now()) / 25));
+    uci = await engineBest(lv.skill, lv.depth, Math.round(ms));
+    if (!uci) { const m = legal[Math.floor(Math.random() * legal.length)]; uci = m && toUci(m); }
+  }
+  // naturalne tempo: bot „myśli” chwilę, ale nie marnuje czasu przy szybkim tempie
+  let think = lv.think * (0.6 + Math.random() * 0.8);
+  if (G.clock.on) think = Math.min(think, G.clock.left(-G.my, performance.now()) / 40);
+  const wait = think - (performance.now() - t0);
+  if (wait > 0) await sleep(wait);
+  if (tok !== G.botTok || !isBot() || G.game !== g || g.isOver() || G.moves.join(' ') !== key || !uci) return;
+  playMove(fromUci(uci), true);
+}
+function undoBot() {
+  if (!G.moves.length) return;
+  G.botTok++; G.hint = null;
+  if (G.botBusy && G.botEngine) G.botEngine.send('stop');
+  // cofnij do ostatniego własnego ruchu (twój ruch + odpowiedź bota)
+  do G.moves.pop(); while (G.moves.length && Chess.replay(G.moves).side !== G.my);
+  G.game = Chess.replay(G.moves);
+  if (G.game.side !== G.my) { G.board.set(G.game); updateGame(); return botThink(); }
+  if (G.moves.length) G.clock.switchTo(G.game.side); else G.clock.stop();
+  G.board.set(G.game); updateGame();
+}
+async function botHint() {
+  const g = G.game;
+  if (g.isOver() || g.side !== G.my) return toast('Poczekaj na swój ruch');
+  toast('Szukam najlepszego ruchu…');
+  const key = G.moves.join(' ');
+  const best = await engineBest(20, 16, 900);
+  if (!best || G.moves.join(' ') !== key || !isBot()) return;
+  G.hint = fromUci(best); updateGame();
+}
+
 function parseInfo(line, white) {
   if (!line.startsWith('info') || !line.includes(' pv ') || !line.includes(' score ') || /lowerbound|upperbound/.test(line)) return null;
   const t = line.split(' '), o = { multipv: 1, depth: 0 };
@@ -1654,7 +1768,7 @@ function showAnalysis() {
   $('#set').onclick = () => showSettings('analysis');
   $('#backgame').onclick = () => { exitVar(); refreshAnalysis(); };
   A.board = new Board($('#aboard'), { onMove: analysisMove });
-  A.board.flip = G.mode === 'online' && G.my === BLACK;
+  A.board.flip = G.mode !== 'local' && G.my === BLACK;
   const nav = $('#nav');
   [['first', 'Początek', 0], ['back', 'Wstecz', 1], ['next', 'Dalej', 2], ['last', 'Koniec', 3]].forEach(([i, l, k]) => {
     const b = document.createElement('button'); b.className = 'act'; b.innerHTML = ic(i) + l; b.onclick = () => navigate(k); nav.appendChild(b);
